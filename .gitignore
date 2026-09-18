@@ -1,0 +1,47 @@
+# Environment
+.env
+.env.*
+!.env.example
+
+# Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Build
+dist/
+build/
+out/
+
+# Android
+.gradle/
+.idea/
+local.properties
+*.iml
+captures/
+.externalNativeBuild/
+.cxx/
+
+# Generated
+*.apk
+*.aab
+
+# ML
+*.onnx
+*.pt
+*.pth
+*.h5
+*.tflite
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+
+# Logs
+*.log
