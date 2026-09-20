@@ -22,6 +22,10 @@ local.properties
 captures/
 .externalNativeBuild/
 .cxx/
+.kotlin/
+*.hprof
+*.jks
+*.keystore
 
 # Generated
 *.apk
@@ -29,6 +33,7 @@ captures/
 
 # ML
 *.onnx
+!android/app/src/main/assets/minifasnet_v2.onnx
 *.pt
 *.pth
 *.h5
@@ -45,3 +50,16 @@ Thumbs.db
 
 # Logs
 *.log
+.gradle-user-home/
+.gradle/
+build/
+android/.gradle-user/
+.gradle-user-home/
+.gradle/
+build/
+android/.gradle/
+android/android/.gradle-user/
+**/.gradle-user/
+**/.gradle/
+**/.android-user/
+supabase/.temp/
