@@ -12,7 +12,7 @@ import type {
 } from "../types/database";
 
 const employeeSelect =
-  "id, employee_code, full_name, email, phone, department_id, designation, joining_date, status, created_by, created_at, updated_at, departments(id, name, code)";
+  "id, employee_code, full_name, email, phone, department_id, designation, joining_date, salary, status, created_by, created_at, updated_at, departments(id, name, code)";
 const attendanceSelect =
   "id, employee_id, attendance_date, check_in, check_out, status, working_minutes, created_at, employees(id, employee_code, full_name, department_id, departments(id, name, code))";
 
@@ -84,6 +84,17 @@ export async function getEmployees() {
   return (data ?? []) as unknown as Employee[];
 }
 
+export async function getEmployee(employeeId: string) {
+  const { data, error } = await supabase
+    .from("employees")
+    .select(employeeSelect)
+    .eq("id", employeeId)
+    .maybeSingle();
+
+  throwIfError(error);
+  return data as unknown as Employee | null;
+}
+
 export async function getEnrollmentSessions() {
   const { data, error } = await supabase
     .from("enrollment_sessions")
@@ -114,13 +125,40 @@ export async function getAttendance(options: {
   return (data ?? []) as unknown as AttendanceRecord[];
 }
 
+export async function getEmployeeAttendance(employeeId: string, options: { from: string; to: string }) {
+  const { data, error } = await supabase
+    .from("attendance")
+    .select("id, employee_id, attendance_date, check_in, check_out, status, working_minutes, created_at")
+    .eq("employee_id", employeeId)
+    .gte("attendance_date", options.from)
+    .lte("attendance_date", options.to)
+    .order("attendance_date", { ascending: true })
+    .order("check_in", { ascending: true });
+
+  throwIfError(error);
+  return (data ?? []) as AttendanceRecord[];
+}
+
+export async function deleteAttendanceSession(attendanceId: string) {
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(attendanceId)) {
+    throw new Error("Invalid attendance session.");
+  }
+
+  const { error } = await supabase
+    .from("attendance")
+    .delete()
+    .eq("id", attendanceId);
+
+  throwIfError(error);
+}
+
 export async function getDashboardData(): Promise<DashboardData> {
   const today = getToday();
   const [employeesResult, departmentsResult, todayResult, recentAttendance] =
     await Promise.all([
       supabase.from("employees").select("status"),
       supabase.from("departments").select("is_active"),
-      supabase.from("attendance").select("status").eq("attendance_date", today),
+      supabase.from("attendance").select("employee_id, status").eq("attendance_date", today),
       getAttendance({ from: getDateDaysAgo(6), to: today, limit: 6 }),
     ]);
 
@@ -130,9 +168,13 @@ export async function getDashboardData(): Promise<DashboardData> {
 
   const employees = (employeesResult.data ?? []) as Array<{ status: EmployeeStatus }>;
   const departments = (departmentsResult.data ?? []) as Array<{ is_active: boolean }>;
-  const todayAttendance = (todayResult.data ?? []) as Array<{ status: AttendanceStatus }>;
+  const todayAttendance = (todayResult.data ?? []) as Array<{ employee_id: string; status: AttendanceStatus }>;
   const activeEmployees = employees.filter((employee) => employee.status === "ACTIVE").length;
-  const presentToday = todayAttendance.filter((record) => record.status === "PRESENT").length;
+  const presentToday = new Set(
+    todayAttendance
+      .filter((record) => record.status === "PRESENT")
+      .map((record) => record.employee_id),
+  ).size;
 
   return {
     totalEmployees: employees.length,
@@ -156,12 +198,56 @@ export async function createEmployee(input: {
 }) {
   const { data, error } = await supabase
     .from("employees")
-    .insert(input)
+    .insert({ ...input, salary: 0 })
     .select(employeeSelect)
     .single();
 
   throwIfError(error);
   return data as unknown as Employee;
+}
+
+export async function updateEmployeeSalary(employeeId: string, salary: number) {
+  if (!Number.isFinite(salary) || salary < 0 || salary > 9_999_999_999.99) {
+    throw new Error("Salary must be a valid non-negative amount.");
+  }
+
+  const { data, error } = await supabase
+    .from("employees")
+    .update({ salary })
+    .eq("id", employeeId)
+    .select(employeeSelect)
+    .single();
+
+  throwIfError(error);
+  return data as unknown as Employee;
+}
+
+export async function deleteEmployee(employeeId: string) {
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(employeeId)) {
+    throw new Error("Invalid employee.");
+  }
+
+  const { data, error } = await supabase.rpc("delete_employee", {
+    p_employee_id: employeeId,
+  });
+
+  if (error) {
+    if (import.meta.env.DEV) {
+      console.error("[delete_employee] RPC failed", {
+        code: error.code,
+        message: error.message,
+      });
+    }
+    if (error.code === "42501") throw new Error("Active administrator access is required.");
+    if (error.code === "P0002") throw new Error("Employee no longer exists.");
+    throw new Error("Employee could not be deleted. No changes were made.");
+  }
+
+  if (!data || data.deleted !== true) {
+    throw new Error("Employee could not be deleted. No changes were made.");
+  }
+
+  return data as { deleted: true; employee_id: string };
 }
 
 export async function createEnrollmentSession(employeeId: string) {

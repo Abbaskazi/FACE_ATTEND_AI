@@ -14,7 +14,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 
 @Composable
-fun HomeScreen(onStartAttendance: () -> Unit, onStartEnrollment: () -> Unit) {
+fun HomeScreen(
+    onStartCheckIn: () -> Unit,
+    onStartCheckOut: () -> Unit,
+    onStartEnrollment: () -> Unit,
+    onOpenRecognitionLogs: () -> Unit,
+) {
     Scaffold { paddingValues ->
         Column(
             modifier = Modifier.fillMaxSize().padding(paddingValues).padding(24.dp),
@@ -27,11 +32,17 @@ fun HomeScreen(onStartAttendance: () -> Unit, onStartEnrollment: () -> Unit) {
                 style = MaterialTheme.typography.bodyLarge,
                 modifier = Modifier.padding(top = 8.dp, bottom = 32.dp),
             )
-            Button(onClick = onStartAttendance) {
-                Text("Attendance")
+            Button(onClick = onStartCheckIn) {
+                Text("Check In")
+            }
+            Button(onClick = onStartCheckOut, modifier = Modifier.padding(top = 12.dp)) {
+                Text("Check Out")
             }
             Button(onClick = onStartEnrollment, modifier = Modifier.padding(top = 12.dp)) {
                 Text("Enroll employee")
+            }
+            Button(onClick = onOpenRecognitionLogs, modifier = Modifier.padding(top = 12.dp)) {
+                Text("Recognition Logs")
             }
         }
     }

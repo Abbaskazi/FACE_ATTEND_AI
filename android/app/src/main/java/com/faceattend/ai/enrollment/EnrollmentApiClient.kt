@@ -1,7 +1,11 @@
 package com.faceattend.ai.enrollment
 
 import com.faceattend.ai.BuildConfig
+import com.faceattend.ai.diagnostics.EmbeddingProvenanceContext
+import com.faceattend.ai.diagnostics.EmbeddingProvenanceEvent
+import com.faceattend.ai.diagnostics.EmbeddingProvenanceStage
 import com.faceattend.ai.face.embedding.EMBEDDING_DIMENSION
+import com.faceattend.ai.face.embedding.EmbeddingProvenanceHasher
 import com.faceattend.ai.face.embedding.MODEL_ASSET_NAME
 import com.faceattend.ai.face.embedding.MODEL_VERSION
 import com.faceattend.ai.face.embedding.EmbeddingValidator
@@ -27,11 +31,27 @@ class EnrollmentApiClient(
         accessToken: String,
         sessionToken: String,
         embedding: FloatArray,
+        provenanceContext: EmbeddingProvenanceContext? = null,
+        onProvenanceEvent: (EmbeddingProvenanceEvent) -> Unit = {},
     ): EnrollmentSubmitResult {
         require(accessToken.isNotBlank()) { "Device session is required" }
         require(sessionToken.isNotBlank()) { "Enrollment session token is required" }
         require(embedding.size == EMBEDDING_DIMENSION) { "Embedding must contain 512 values" }
         EmbeddingValidator.validateNormalized(embedding)
+
+        runCatching {
+            onProvenanceEvent(
+                EmbeddingProvenanceEvent(
+                    stage = EmbeddingProvenanceStage.API_PAYLOAD,
+                    embeddingSha256 = EmbeddingProvenanceHasher.sha256(embedding),
+                    embeddingGeneration = provenanceContext?.embeddingGeneration,
+                    submitGeneration = provenanceContext?.submitGeneration,
+                    sessionTokenPresent = provenanceContext?.sessionTokenPresent ?: sessionToken.isNotBlank(),
+                    hashMatchesReady = provenanceContext?.hashMatchesReady,
+                    generationMatchesReady = provenanceContext?.generationMatchesReady,
+                ),
+            )
+        }
 
         val values = JSONArray()
         embedding.forEach(values::put)
@@ -48,7 +68,7 @@ class EnrollmentApiClient(
                 .toString(),
         )
         if (response.status in 200..299) {
-            return EnrollmentSubmitResult.Success(JSONObject(response.body).optString("completed_at"))
+            return EnrollmentSubmitResult.Success(JSONObject(response.body).optString("completed_at").ifBlank { null })
         }
         return EnrollmentSubmitResult.Failure(
             message = when (response.status) {

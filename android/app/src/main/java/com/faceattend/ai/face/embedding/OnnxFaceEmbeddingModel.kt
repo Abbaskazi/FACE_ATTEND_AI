@@ -25,11 +25,11 @@ class OnnxFaceEmbeddingModel(
     private val closed = AtomicBoolean(false)
 
     init {
-        val modelBytes = context.assets.open(assetName).use { input ->
-            val actualSha = ModelHashVerifier.sha256Hex(input)
-            ModelHashVerifier.requireSha256(actualSha)
-            context.assets.open(assetName).use { it.readBytes() }
-        }
+        val modelFile = OnnxModelFileCache.materialize(
+            context = context,
+            assetName = assetName,
+            expectedSha256 = VERIFIED_MODEL_SHA256,
+        )
 
         val options = OrtSession.SessionOptions()
         try {
@@ -45,7 +45,7 @@ class OnnxFaceEmbeddingModel(
                 )
             }
             Log.i(TAG, "ONNX Runtime XNNPACK initialized")
-            session = environment.createSession(modelBytes, options)
+            session = environment.createSession(modelFile.absolutePath, options)
         } finally {
             options.close()
         }
@@ -63,6 +63,10 @@ class OnnxFaceEmbeddingModel(
     }
 
     override fun embed(face: RgbImage): FaceEmbedding {
+        return embedWithInput(face).embedding
+    }
+
+    override fun embedWithInput(face: RgbImage): FaceEmbeddingInference {
         val input = EmbeddingPreprocessor.toNchwFloat32(face)
         val tensor = OnnxTensor.createTensor(
             environment,
@@ -89,7 +93,10 @@ class OnnxFaceEmbeddingModel(
                 val raw = FloatArray(EMBEDDING_DIMENSION)
                 outputBuffer.get(raw)
                 EmbeddingValidator.validateRaw(raw)
-                return FaceEmbedding(EmbeddingNormalizer.l2Normalize(raw))
+                return FaceEmbeddingInference(
+                    embedding = FaceEmbedding(EmbeddingNormalizer.l2Normalize(raw)),
+                    inputTensor = input,
+                )
             }
         }
     }

@@ -1,6 +1,6 @@
 # attendance-submit
 
-Android-facing attendance API for the Phase 1 secure attendance backend.
+Android-facing check-in/check-out API for the secure attendance backend.
 
 The function requires a Supabase Auth access token belonging to an active row
 in `public.attendance_devices`. It validates the request and invokes the
@@ -16,6 +16,10 @@ Required environment variables:
 - `ATTENDANCE_MODEL_NAME`
 - `ATTENDANCE_MODEL_VERSION`
 
+For the ResNet100 production contract, set `ATTENDANCE_MODEL_NAME` to
+`glintr100.onnx` and `ATTENDANCE_MODEL_VERSION` to
+`4ab1d6435d639628a6f3e5008dd4f929edf4c4124b1a7169e1048f9fef534cdf`.
+
 Optional environment variables:
 
 - `ATTENDANCE_RATE_LIMIT_PER_MINUTE` (default: `30`)
@@ -25,3 +29,14 @@ The liveness/attestation integration point is intentionally left before the
 database RPC call. A client-provided liveness boolean must not be treated as
 proof. Challenge issuance and production liveness enforcement should be added
 before Android attendance is enabled in production.
+
+The database stores one `public.attendance` row per session. The private RPC
+locks the matched employee row, permits multiple completed sessions per local
+attendance date, and permits at most one open session. The response outcomes
+include `CHECK_IN_RECORDED`, `ALREADY_CHECKED_IN`, `CHECK_OUT_RECORDED`,
+`NOT_CHECKED_IN`, `RECOGNITION_FAILED`, `AMBIGUOUS_MATCH`,
+`UNAUTHORIZED_DEVICE`, `RATE_LIMITED`, and
+`VALIDATION_ERROR`. A close top-two match is rejected without selecting an
+employee. Session times and daily totals are
+calculated from database server timestamps; client timestamps and working
+minutes are not accepted.

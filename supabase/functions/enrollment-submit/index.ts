@@ -8,7 +8,13 @@ import {
   sha256Hex,
   toPgVectorLiteral,
 } from "./validation.ts";
-import type { EnrollmentDevice, EnrollmentSessionState, EnrollmentSubmitBody, EnrollmentSubmitResponse } from "./types.ts";
+import type {
+  EnrollmentDevice,
+  EnrollmentSessionState,
+  EnrollmentSubmitBody,
+  EnrollmentSubmitResponse,
+  EnrollmentValidationErrorCode,
+} from "./types.ts";
 
 const CORS_HEADERS = {
   "access-control-allow-headers": "authorization, apikey, content-type, x-client-info",
@@ -31,8 +37,20 @@ function response(body: EnrollmentSubmitResponse, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: JSON_HEADERS });
 }
 
-function failure(status = 400) {
-  return response({ ok: false }, status);
+function failure(status = 400, errorCode?: EnrollmentValidationErrorCode) {
+  return response(errorCode ? { ok: false, error_code: errorCode } : { ok: false }, status);
+}
+
+function validationErrorCode(error: unknown): EnrollmentValidationErrorCode {
+  const message = error instanceof Error ? error.message : "";
+  if (message === "invalid_session_token") return "INVALID_SESSION_TOKEN";
+  if (message === "invalid_model_name") return "INVALID_MODEL";
+  if (message === "invalid_model_version") return "INVALID_MODEL_VERSION";
+  if (message === "invalid_app_version") return "INVALID_APP_VERSION";
+  if (message === "invalid_embedding_dimension") return "INVALID_EMBEDDING_LENGTH";
+  if (message === "embedding_not_normalized") return "INVALID_NORMALIZATION";
+  if (message === "invalid_embedding_value" || message === "zero_embedding") return "INVALID_EMBEDDING";
+  return "INVALID_REQUEST";
 }
 
 async function getAuthenticatedUserId(authClient: SupabaseClient, token: string) {
@@ -63,7 +81,7 @@ async function getEnrollmentState(serverClient: SupabaseClient, tokenHash: strin
 
   const [employeeResult, templateResult] = await Promise.all([
     serverClient.from("employees").select("status").eq("id", session.employee_id).maybeSingle(),
-    serverClient.from("biometric_templates").select("id").eq("employee_id", session.employee_id).maybeSingle(),
+    serverClient.from("biometric_templates").select("id").eq("employee_id", session.employee_id).limit(1).maybeSingle(),
   ]);
   if (employeeResult.error) throw employeeResult.error;
   if (templateResult.error) throw templateResult.error;
@@ -80,9 +98,10 @@ function statusForEnrollmentError(error: unknown) {
     : typeof error === "object" && error !== null && "message" in error
     ? String(error.message)
     : "";
-  if (message.includes("not_found") || message.includes("invalid")) return 422;
+  if (message.includes("not_found") || message.includes("invalid") || message.includes("incomplete") || message.includes("contract_mismatch")) return 422;
   if (message.includes("expired")) return 410;
   if (message.includes("reused") || message.includes("already_enrolled")) return 409;
+  if (message.includes("unauthorized_enrollment_device")) return 403;
   if (message.includes("not_active")) return 422;
   return 500;
 }
@@ -104,8 +123,8 @@ async function handleRequest(request: Request) {
     const rawBody = await request.text();
     if (new TextEncoder().encode(rawBody).byteLength > MAX_BODY_BYTES) return failure(413);
     body = parseEnrollmentBody(JSON.parse(rawBody));
-  } catch {
-    return failure(400);
+  } catch (error) {
+    return failure(400, validationErrorCode(error));
   }
 
   const expectedModelName = getRequiredEnv("ENROLLMENT_MODEL_NAME");
@@ -149,7 +168,9 @@ async function handleRequest(request: Request) {
     return failure(statusForEnrollmentError(error));
   }
   const result = (Array.isArray(data) ? data[0] : data) as { completed_at?: string } | null;
-  if (!result?.completed_at) throw new Error(`invalid_enrollment_rpc_result_${EMBEDDING_DIMENSION}`);
+  if (!result?.completed_at) {
+    throw new Error(`invalid_enrollment_rpc_result_${EMBEDDING_DIMENSION}`);
+  }
   return response({ ok: true, completed_at: result.completed_at });
 }
 

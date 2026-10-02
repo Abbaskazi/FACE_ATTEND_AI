@@ -2,6 +2,7 @@ import type { AttendanceAction, AttendanceSubmitBody } from "./types.ts";
 
 export const MAX_BODY_BYTES = 100 * 1024;
 export const EMBEDDING_DIMENSION = 512;
+export const NORMALIZED_NORM_TOLERANCE = 0.01;
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const VERSION_PATTERN = /^[A-Za-z0-9][A-Za-z0-9.+_-]{0,63}$/;
@@ -24,6 +25,18 @@ export function parseAttendanceBody(value: unknown): AttendanceSubmitBody {
   }
 
   const body = value as Record<string, unknown>;
+  const allowedKeys = new Set([
+    "request_id",
+    "action",
+    "embedding",
+    "model_name",
+    "model_version",
+    "app_version",
+    "challenge_id",
+  ]);
+  if (Object.keys(body).some((key) => !allowedKeys.has(key))) {
+    throw new Error("unexpected_field");
+  }
   if (!isUuid(body.request_id)) throw new Error("invalid_request_id");
   if (!isAction(body.action)) throw new Error("invalid_action");
   if (!isSafeVersion(body.model_name)) throw new Error("invalid_model_name");
@@ -48,6 +61,10 @@ export function parseAttendanceBody(value: unknown): AttendanceSubmitBody {
   const squaredMagnitude = embedding.reduce((sum, value) => sum + value * value, 0);
   if (!Number.isFinite(squaredMagnitude) || squaredMagnitude <= Number.EPSILON) {
     throw new Error("zero_embedding");
+  }
+  const norm = Math.sqrt(squaredMagnitude);
+  if (Math.abs(norm - 1) > NORMALIZED_NORM_TOLERANCE) {
+    throw new Error("embedding_not_normalized");
   }
 
   return {

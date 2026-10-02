@@ -75,7 +75,6 @@ async function handleRequest(request: Request) {
     p_expires_at: expiresAt,
   });
   if (error) {
-    if (error.message.includes("already_enrolled")) return failure(409);
     if (error.message.includes("not_active")) return failure(422);
     throw error;
   }

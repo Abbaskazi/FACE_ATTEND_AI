@@ -6,6 +6,8 @@ import com.google.mlkit.vision.face.Face
 data class AlignedFace(
     val bitmap: Bitmap,
     val alignmentVersion: String,
+    val sourceLandmarks: List<AlignmentPoint> = emptyList(),
+    val targetLandmarks: List<AlignmentPoint> = emptyList(),
 )
 
 interface FaceAlignment {

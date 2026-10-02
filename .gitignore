@@ -63,3 +63,10 @@ android/android/.gradle-user/
 **/.gradle/
 **/.android-user/
 supabase/.temp/
+.gradle-local/
+.supabase-home/
+android/.android/
+android/.gradle-local/
+android/.user-home/
+__pycache__/
+*.pyc

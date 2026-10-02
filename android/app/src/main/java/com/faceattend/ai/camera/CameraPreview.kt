@@ -21,6 +21,7 @@ import com.faceattend.ai.face.alignment.ArcFaceAligner
 import com.faceattend.ai.face.embedding.FaceEmbedding
 import com.faceattend.ai.face.embedding.FaceEmbeddingModel
 import com.faceattend.ai.face.liveness.FaceLivenessModel
+import com.faceattend.ai.diagnostics.EnrollmentInputDiagnosticCapture
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 
@@ -33,29 +34,36 @@ fun CameraPreview(
     livenessModel: FaceLivenessModel? = null,
     onStateChanged: (FaceDetectionState) -> Unit,
     onCameraError: (String) -> Unit,
-    onEmbeddingReady: (FaceEmbedding, String) -> Unit = { _, _ -> },
+    sessionGeneration: String? = null,
+    onEmbeddingReady: (FaceEmbedding, String, String?) -> Unit = { _, _, _ -> },
+    onEmbeddingDiagnosticReady: (EnrollmentInputDiagnosticCapture) -> Unit = {},
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val previewView = remember { PreviewView(context) }
-    val analysisExecutor = remember { Executors.newSingleThreadExecutor() }
+    val analysisExecutor = remember(embeddingModel, livenessModel, sessionGeneration) {
+        Executors.newSingleThreadExecutor()
+    }
     val currentStateCallback = rememberUpdatedState(onStateChanged)
     val currentCameraErrorCallback = rememberUpdatedState(onCameraError)
     val currentEmbeddingCallback = rememberUpdatedState(onEmbeddingReady)
-    val analyzer = remember(embeddingModel, livenessModel) {
+    val currentDiagnosticCallback = rememberUpdatedState(onEmbeddingDiagnosticReady)
+    val analyzer = remember(embeddingModel, livenessModel, sessionGeneration) {
         FaceAnalyzer(
             embeddingModel = embeddingModel,
             alignment = ArcFaceAligner(),
             inferenceExecutor = analysisExecutor,
             onStateChanged = { currentStateCallback.value(it) },
-            onEmbeddingReady = { embedding, version ->
-                currentEmbeddingCallback.value(embedding, version)
+            sessionGeneration = sessionGeneration,
+            onEmbeddingReady = { embedding, version, generation ->
+                currentEmbeddingCallback.value(embedding, version, generation)
             },
+            onEmbeddingDiagnosticReady = { capture -> currentDiagnosticCallback.value(capture) },
             livenessModel = livenessModel,
         )
     }
 
-    DisposableEffect(lifecycleOwner, embeddingModel, livenessModel) {
+    DisposableEffect(lifecycleOwner, embeddingModel, livenessModel, sessionGeneration) {
         val cameraProviderFuture = ProcessCameraProvider.getInstance(context)
         val mainExecutor = ContextCompat.getMainExecutor(context)
         val listener = Runnable {

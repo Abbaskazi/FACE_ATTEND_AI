@@ -21,6 +21,7 @@ object ImageProxyBitmapConverter {
         require(image.format == ImageFormat.YUV_420_888) { "Expected YUV_420_888 camera frames" }
         val width = image.width
         val height = image.height
+        val cropRect = CameraFrameCrop.validate(width, height, imageProxy.cropRect)
         val nv21 = ByteArray(width * height * 3 / 2)
         copyLuma(imageProxy, nv21, width, height)
         copyChroma(imageProxy, nv21, width, height)
@@ -28,7 +29,7 @@ object ImageProxyBitmapConverter {
         val jpeg = ByteArrayOutputStream()
         check(
             YuvImage(nv21, ImageFormat.NV21, width, height, null)
-                .compressToJpeg(Rect(0, 0, width, height), 90, jpeg),
+                .compressToJpeg(Rect(cropRect.left, cropRect.top, cropRect.right, cropRect.bottom), 90, jpeg),
         ) { "Unable to convert camera frame to RGB" }
         return BitmapFactory.decodeByteArray(jpeg.toByteArray(), 0, jpeg.size())
             ?: error("Unable to decode camera RGB frame")
@@ -64,5 +65,35 @@ object ImageProxyBitmapConverter {
                 )
             }
         }
+    }
+}
+
+/** Validates the ImageProxy crop in the raw image coordinate system. */
+internal data class CameraCropRect(
+    val left: Int,
+    val top: Int,
+    val right: Int,
+    val bottom: Int,
+)
+
+internal object CameraFrameCrop {
+    fun validate(imageWidth: Int, imageHeight: Int, cropRect: Rect): CameraCropRect =
+        validate(imageWidth, imageHeight, cropRect.left, cropRect.top, cropRect.right, cropRect.bottom)
+
+    internal fun validate(
+        imageWidth: Int,
+        imageHeight: Int,
+        left: Int,
+        top: Int,
+        right: Int,
+        bottom: Int,
+    ): CameraCropRect {
+        require(imageWidth > 0 && imageHeight > 0) { "Camera image dimensions must be positive" }
+        require(left >= 0 && top >= 0) { "Camera crop must not start outside the image" }
+        require(right <= imageWidth && bottom <= imageHeight) {
+            "Camera crop must remain inside the image"
+        }
+        require(right > left && bottom > top) { "Camera crop must not be empty" }
+        return CameraCropRect(left, top, right, bottom)
     }
 }

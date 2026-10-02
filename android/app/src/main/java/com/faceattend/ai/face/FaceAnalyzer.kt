@@ -3,11 +3,15 @@ package com.faceattend.ai.face
 import android.annotation.SuppressLint
 import android.graphics.Bitmap
 import android.media.Image
+import android.graphics.Rect
 import android.util.Log
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.ImageProxy
 import com.faceattend.ai.BuildConfig
 import com.faceattend.ai.camera.ImageProxyBitmapConverter
+import com.faceattend.ai.diagnostics.SelectedFaceDiagnostic
+import com.faceattend.ai.diagnostics.DiagnosticRect
+import com.faceattend.ai.diagnostics.EnrollmentInputDiagnosticCapture
 import com.faceattend.ai.domain.FaceCountGate
 import com.faceattend.ai.domain.FaceGateStatus
 import com.faceattend.ai.face.alignment.BitmapOrientation
@@ -15,6 +19,12 @@ import com.faceattend.ai.face.alignment.FaceAlignment
 import com.faceattend.ai.face.embedding.BitmapRgbConverter
 import com.faceattend.ai.face.embedding.FaceEmbedding
 import com.faceattend.ai.face.embedding.FaceEmbeddingModel
+import com.faceattend.ai.face.embedding.EMBEDDING_DIMENSION
+import com.faceattend.ai.face.embedding.EmbeddingProvenanceHasher
+import com.faceattend.ai.face.embedding.EmbeddingTensorHasher
+import com.faceattend.ai.face.embedding.EmbeddingValidator
+import com.faceattend.ai.face.embedding.MODEL_ASSET_NAME
+import com.faceattend.ai.face.embedding.MODEL_VERSION
 import com.faceattend.ai.face.liveness.FaceLivenessCropper
 import com.faceattend.ai.face.liveness.FaceLivenessModel
 import com.faceattend.ai.face.liveness.LivenessAggregator
@@ -34,7 +44,9 @@ class FaceAnalyzer(
     private val alignment: FaceAlignment,
     private val inferenceExecutor: Executor,
     private val onStateChanged: (FaceDetectionState) -> Unit,
-    private val onEmbeddingReady: (FaceEmbedding, String) -> Unit = { _, _ -> },
+    private val sessionGeneration: String? = null,
+    private val onEmbeddingReady: (FaceEmbedding, String, String?) -> Unit = { _, _, _ -> },
+    private val onEmbeddingDiagnosticReady: (EnrollmentInputDiagnosticCapture) -> Unit = {},
     private val livenessModel: FaceLivenessModel? = null,
 ) : ImageAnalysis.Analyzer {
     private val detector: FaceDetector = FaceDetection.getClient(
@@ -61,6 +73,9 @@ class FaceAnalyzer(
         }
 
         val rotationDegrees = imageProxy.imageInfo.rotationDegrees
+        val sourceImageWidth = mediaImage.width
+        val sourceImageHeight = mediaImage.height
+        val sourceCropRect = Rect(imageProxy.cropRect)
         val sourceBitmap = runCatching { ImageProxyBitmapConverter.toBitmap(imageProxy) }
             .getOrElse { error ->
                 Log.w(TAG, "Camera frame conversion failed", error)
@@ -84,16 +99,37 @@ class FaceAnalyzer(
                 val gateStatus = FaceCountGate.statusFor(faces.size)
                 if (gateStatus != FaceGateStatus.SINGLE_FACE) {
                     resetLivenessSession("face-count-${faces.size}")
-                    onStateChanged(FaceDetectionState(status = gateStatus))
+                    onStateChanged(
+                        FaceDetectionState(
+                            status = gateStatus,
+                            detectedFaceCount = faces.size,
+                        ),
+                    )
                     return@addOnSuccessListener
                 }
 
                 val face = faces.single()
                 val state = runCatching {
                     if (livenessModel != null) {
-                        analyzeLiveness(orientedBitmap, face, gateStatus)
+                        analyzeLiveness(
+                            frame = orientedBitmap,
+                            face = face,
+                            gateStatus = gateStatus,
+                            sourceImageWidth = sourceImageWidth,
+                            sourceImageHeight = sourceImageHeight,
+                            sourceCropRect = sourceCropRect,
+                            rotationDegrees = rotationDegrees,
+                        )
                     } else {
-                        embedFace(orientedBitmap, face, gateStatus)
+                        embedFace(
+                            frame = orientedBitmap,
+                            face = face,
+                            gateStatus = gateStatus,
+                            sourceImageWidth = sourceImageWidth,
+                            sourceImageHeight = sourceImageHeight,
+                            sourceCropRect = sourceCropRect,
+                            rotationDegrees = rotationDegrees,
+                        )
                     }
                 }.getOrElse { error ->
                     Log.w(TAG, "Face verification failed", error)
@@ -112,7 +148,12 @@ class FaceAnalyzer(
                         },
                     )
                 }
-                onStateChanged(state)
+                onStateChanged(
+                    state.copy(
+                        detectedFaceCount = faces.size,
+                        selectedFace = face.toSelectedFaceDiagnostic(),
+                    ),
+                )
             }
             .addOnFailureListener(inferenceExecutor) { error ->
                 Log.w(TAG, "Face detection failed", error)
@@ -130,6 +171,10 @@ class FaceAnalyzer(
         frame: Bitmap,
         face: Face,
         gateStatus: FaceGateStatus,
+        sourceImageWidth: Int,
+        sourceImageHeight: Int,
+        sourceCropRect: Rect,
+        rotationDegrees: Int,
     ): FaceDetectionState {
         val trackingId = face.trackingId ?: run {
             resetLivenessSession("missing-tracking-id")
@@ -203,6 +248,10 @@ class FaceAnalyzer(
                     aggregation.progressPercent,
                     aggregation.medianScore,
                     trackingId,
+                    sourceImageWidth,
+                    sourceImageHeight,
+                    sourceCropRect,
+                    rotationDegrees,
                 )
             }
             return FaceDetectionState(
@@ -222,6 +271,10 @@ class FaceAnalyzer(
             100,
             null,
             trackingId,
+            sourceImageWidth,
+            sourceImageHeight,
+            sourceCropRect,
+            rotationDegrees,
         )
     }
 
@@ -233,13 +286,52 @@ class FaceAnalyzer(
         livenessProgress: Int = 0,
         livenessScore: Float? = null,
         trackingId: Int? = face.trackingId,
+        sourceImageWidth: Int,
+        sourceImageHeight: Int,
+        sourceCropRect: Rect,
+        rotationDegrees: Int,
     ): FaceDetectionState {
         if (!embeddingEmitted) {
             val alignedFace = alignment.align(frame, face, rotationDegrees = 0)
             try {
                 val rgbFace = BitmapRgbConverter.toRgbImage(alignedFace.bitmap)
-                val embedding = embeddingModel.embed(rgbFace)
-                onEmbeddingReady(embedding, alignedFace.alignmentVersion)
+                val inference = embeddingModel.embedWithInput(rgbFace)
+                if (BuildConfig.DEBUG) {
+                    runCatching {
+                        onEmbeddingDiagnosticReady(
+                            EnrollmentInputDiagnosticCapture(
+                                timestampEpochMs = System.currentTimeMillis(),
+                                employeeCode = null,
+                                sessionGeneration = sessionGeneration,
+                                cameraFacing = "FRONT",
+                                sourceImageWidth = sourceImageWidth,
+                                sourceImageHeight = sourceImageHeight,
+                                cropRect = sourceCropRect.toDiagnosticRect(),
+                                rotationDegrees = rotationDegrees,
+                                analysisImageWidth = frame.width,
+                                analysisImageHeight = frame.height,
+                                faceBoundingBox = face.boundingBox.toDiagnosticRect(),
+                                sourceLandmarks = alignedFace.sourceLandmarks,
+                                targetLandmarks = alignedFace.targetLandmarks,
+                                alignedBitmap = alignedFace.bitmap,
+                                modelName = MODEL_ASSET_NAME,
+                                modelVersion = MODEL_VERSION,
+                                tensorShape = listOf(1, 3, 112, 112),
+                                preprocessingFormula = "(pixel - 127.5) / 127.5",
+                                channelOrder = "RGB",
+                                embeddingDimension = EMBEDDING_DIMENSION,
+                                embeddingL2Norm = EmbeddingValidator.l2Norm(inference.embedding.values),
+                                embeddingProvenanceSha256 = EmbeddingProvenanceHasher.sha256(
+                                    inference.embedding.values,
+                                ),
+                                inputTensor = inference.inputTensor.copyOf(),
+                            ),
+                        )
+                    }.onFailure { error ->
+                        Log.w(TAG, "Enrollment input diagnostic capture failed", error)
+                    }
+                }
+                onEmbeddingReady(inference.embedding, alignedFace.alignmentVersion, sessionGeneration)
                 embeddingEmitted = true
             } finally {
                 alignedFace.bitmap.recycle()
@@ -274,4 +366,14 @@ class FaceAnalyzer(
     fun close() {
         detector.close()
     }
+
+    private fun Face.toSelectedFaceDiagnostic(): SelectedFaceDiagnostic = SelectedFaceDiagnostic(
+        trackingId = trackingId,
+        left = boundingBox.left,
+        top = boundingBox.top,
+        right = boundingBox.right,
+        bottom = boundingBox.bottom,
+    )
+
+    private fun Rect.toDiagnosticRect(): DiagnosticRect = DiagnosticRect(left, top, right, bottom)
 }

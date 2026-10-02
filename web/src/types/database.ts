@@ -31,6 +31,7 @@ export interface Employee {
   department_id: string | null;
   designation: string | null;
   joining_date: string | null;
+  salary: number;
   status: EmployeeStatus;
   created_by: string | null;
   created_at: string;

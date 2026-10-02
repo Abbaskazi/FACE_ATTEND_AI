@@ -2,6 +2,7 @@ package com.faceattend.ai.ui.attendance
 
 import android.Manifest
 import android.content.pm.PackageManager
+import android.os.SystemClock
 import android.util.Log
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -36,10 +37,15 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import com.faceattend.ai.attendance.AttendanceApiClient
 import com.faceattend.ai.attendance.AttendanceApiException
+import com.faceattend.ai.attendance.AttendanceAction
 import com.faceattend.ai.attendance.AttendanceOutcome
 import com.faceattend.ai.attendance.AttendanceSubmitResult
 import com.faceattend.ai.auth.DeviceSessionManager
 import com.faceattend.ai.camera.CameraPreview
+import com.faceattend.ai.diagnostics.RecognitionLogFactory
+import com.faceattend.ai.diagnostics.RecognitionLogRepository
+import com.faceattend.ai.diagnostics.RecognitionLogResult
+import com.faceattend.ai.diagnostics.RecognitionOperation
 import com.faceattend.ai.domain.FaceGateStatus
 import com.faceattend.ai.face.FaceDetectionState
 import com.faceattend.ai.face.LivenessStatus
@@ -55,9 +61,13 @@ import java.util.UUID
 import java.util.concurrent.atomic.AtomicBoolean
 
 private data class AttendanceSuccess(
+    val outcome: AttendanceOutcome,
     val employeeName: String,
     val employeeCode: String,
-    val checkInTime: String,
+    val checkInTime: String?,
+    val checkOutTime: String?,
+    val sessionWorkingMinutes: Int?,
+    val todayTotalWorkingMinutes: Int?,
 )
 
 private const val ATTENDANCE_DEBUG_TAG = "FACEATTEND_ATTENDANCE_DEBUG"
@@ -79,6 +89,8 @@ private fun safeAttendanceExceptionSummary(error: Throwable): String {
 @OptIn(ExperimentalMaterial3Api::class)
 fun AttendanceScreen(
     sessionManager: DeviceSessionManager,
+    recognitionLogRepository: RecognitionLogRepository,
+    action: AttendanceAction,
     onBack: () -> Unit,
     onSetupRequired: () -> Unit,
 ) {
@@ -102,9 +114,56 @@ fun AttendanceScreen(
     var attendanceMessage by remember { mutableStateOf<String?>(null) }
     var success by remember { mutableStateOf<AttendanceSuccess?>(null) }
     var pendingRequestId by remember { mutableStateOf<String?>(null) }
+    val operationStartedAt = remember { SystemClock.elapsedRealtime() }
+    val cameraErrorLogged = remember { AtomicBoolean(false) }
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission(),
     ) { granted -> hasCameraPermission = granted }
+
+    fun recordAttendance(
+        result: RecognitionLogResult,
+        embeddingGenerated: Boolean,
+        employeeCode: String? = null,
+        employeeName: String? = null,
+        diagnostic: com.faceattend.ai.attendance.AttendanceDiagnosticSummary? = null,
+        errorCode: String? = null,
+        errorMessage: String? = null,
+    ) {
+        val diagnosticInfo = diagnostic?.let {
+            listOfNotNull(
+                it.decision?.let { value -> "decision=$value" },
+                it.candidateCount?.let { value -> "candidateCount=$value" },
+                it.normalizationStatus?.let { value -> "normalizationStatus=$value" },
+            ).joinToString(", ").ifBlank { null }
+        }
+        runCatching {
+            recognitionLogRepository.record(
+                RecognitionLogFactory.create(
+                    operation = if (action == AttendanceAction.CHECK_IN) {
+                        RecognitionOperation.CHECK_IN
+                    } else {
+                        RecognitionOperation.CHECK_OUT
+                    },
+                    result = result,
+                    startedAtElapsedRealtime = operationStartedAt,
+                    state = detectionState,
+                    embeddingGenerated = embeddingGenerated,
+                    employeeCode = employeeCode,
+                    employeeName = employeeName,
+                    candidateCount = diagnostic?.candidateCount,
+                    topCandidate = diagnostic?.topEmployeeCode ?: employeeCode,
+                    topScore = diagnostic?.topScore,
+                    secondScore = diagnostic?.secondScore,
+                    margin = diagnostic?.scoreMargin,
+                    threshold = diagnostic?.threshold,
+                    ambiguityMargin = diagnostic?.ambiguityMargin,
+                    errorCode = errorCode,
+                    errorMessage = errorMessage,
+                    diagnosticInfo = diagnosticInfo,
+                ),
+            )
+        }
+    }
 
     LaunchedEffect(Unit) {
         if (!sessionManager.hasSession()) onSetupRequired()
@@ -124,6 +183,12 @@ fun AttendanceScreen(
             livenessModel = liveness
             modelLoading = false
         }.onFailure { error ->
+            recordAttendance(
+                result = RecognitionLogResult.ERROR,
+                embeddingGenerated = false,
+                errorCode = "MODEL_INITIALIZATION_FAILED",
+                errorMessage = error.message,
+            )
             Log.e("FaceAttendModel", "Face/liveness model initialization failed", error)
             modelError = true
             modelLoading = false
@@ -160,6 +225,12 @@ fun AttendanceScreen(
                 "SESSION_TOKEN_CHECK accessTokenPresent=${accessToken != null}",
             )
             if (accessToken == null) {
+                recordAttendance(
+                    result = RecognitionLogResult.ERROR,
+                    embeddingGenerated = true,
+                    errorCode = "SESSION_MISSING",
+                    errorMessage = "Device session is unavailable",
+                )
                 Log.d(ATTENDANCE_DEBUG_TAG, "SESSION_TOKEN_CHECK=FAILED setupRequired=true")
                 sessionManager.clear()
                 submitting = false
@@ -169,7 +240,7 @@ fun AttendanceScreen(
             }
             val result = withContext(Dispatchers.IO) {
                 runCatching {
-                    apiClient.submitCheckIn(accessToken, requestId, embedding.values.copyOf())
+                    apiClient.submit(accessToken, requestId, embedding.values.copyOf(), action)
                 }
             }
             result.onSuccess { outcome ->
@@ -185,27 +256,98 @@ fun AttendanceScreen(
                                 "employeeIdentified=${outcome.employeeCode != null || outcome.employeeName != null}",
                         )
                         pendingRequestId = null
-                        if (outcome.outcome == AttendanceOutcome.NOT_RECORDED) {
-                            attendanceMessage = "Employee not identified"
-                        } else {
-                            attendanceMessage = "Attendance Marked"
-                            success = AttendanceSuccess(
-                                employeeName = outcome.employeeName ?: "Unavailable",
-                                employeeCode = outcome.employeeCode ?: "Unavailable",
-                                checkInTime = outcome.serverTime ?: "Unavailable",
-                            )
+                        val employeeName = outcome.employeeName
+                        val employeeCode = outcome.employeeCode
+                        recordAttendance(
+                            result = when (outcome.outcome) {
+                                AttendanceOutcome.AMBIGUOUS_MATCH -> RecognitionLogResult.AMBIGUOUS
+                                AttendanceOutcome.RECOGNITION_FAILED -> RecognitionLogResult.FAILED
+                                AttendanceOutcome.NOT_RECORDED -> RecognitionLogResult.FAILED
+                                else -> RecognitionLogResult.SUCCESS
+                            },
+                            embeddingGenerated = true,
+                            employeeCode = employeeCode,
+                            employeeName = employeeName,
+                            diagnostic = outcome.diagnostic,
+                        )
+                        when (outcome.outcome) {
+                            AttendanceOutcome.RECOGNITION_FAILED ->
+                                attendanceMessage = "Employee could not be recognized."
+                            AttendanceOutcome.AMBIGUOUS_MATCH ->
+                                attendanceMessage = "Face could not be reliably recognized. Please try again."
+                            AttendanceOutcome.NOT_RECORDED ->
+                                attendanceMessage = "Attendance could not be recorded. Please try again."
+                            AttendanceOutcome.ALREADY_CHECKED_IN -> {
+                                attendanceMessage = "You are already checked in."
+                                if (employeeName != null && employeeCode != null) {
+                                    success = AttendanceSuccess(
+                                        outcome = outcome.outcome,
+                                        employeeName = employeeName,
+                                        employeeCode = employeeCode,
+                                        checkInTime = outcome.checkInTime,
+                                        checkOutTime = null,
+                                        sessionWorkingMinutes = null,
+                                        todayTotalWorkingMinutes = outcome.todayTotalWorkingMinutes,
+                                    )
+                                }
+                            }
+                            AttendanceOutcome.NOT_CHECKED_IN -> {
+                                attendanceMessage = "You are not checked in. Please check in first."
+                                if (employeeName != null && employeeCode != null) {
+                                    success = AttendanceSuccess(
+                                        outcome = outcome.outcome,
+                                        employeeName = employeeName,
+                                        employeeCode = employeeCode,
+                                        checkInTime = null,
+                                        checkOutTime = null,
+                                        sessionWorkingMinutes = null,
+                                        todayTotalWorkingMinutes = outcome.todayTotalWorkingMinutes,
+                                    )
+                                }
+                            }
+                            AttendanceOutcome.CHECK_IN_RECORDED,
+                            AttendanceOutcome.CHECK_OUT_RECORDED -> {
+                                if (employeeName == null || employeeCode == null || outcome.serverTime == null) {
+                                    attendanceMessage = "Attendance response was incomplete"
+                                } else {
+                                    attendanceMessage = if (outcome.outcome == AttendanceOutcome.CHECK_IN_RECORDED) {
+                                        "Check-In Successful"
+                                    } else {
+                                        "Check-Out Successful"
+                                    }
+                                    success = AttendanceSuccess(
+                                        outcome = outcome.outcome,
+                                        employeeName = employeeName,
+                                        employeeCode = employeeCode,
+                                        checkInTime = outcome.checkInTime,
+                                        checkOutTime = outcome.checkOutTime,
+                                        sessionWorkingMinutes = outcome.sessionWorkingMinutes,
+                                        todayTotalWorkingMinutes = outcome.todayTotalWorkingMinutes,
+                                    )
+                                }
+                            }
+                            else -> attendanceMessage = "Unable to process attendance. Please try again."
                         }
                     }
                     is AttendanceSubmitResult.Failure -> {
+                        recordAttendance(
+                            result = if (outcome.diagnostic?.decision == "AMBIGUOUS_MATCH") {
+                                RecognitionLogResult.AMBIGUOUS
+                            } else {
+                                RecognitionLogResult.FAILED
+                            },
+                            embeddingGenerated = true,
+                            employeeCode = outcome.diagnostic?.topEmployeeCode,
+                            diagnostic = outcome.diagnostic,
+                            errorCode = outcome.diagnostic?.decision ?: "ATTENDANCE_SUBMIT_FAILED",
+                            errorMessage = outcome.message,
+                        )
                         Log.d(
                             ATTENDANCE_DEBUG_TAG,
                             "SCREEN_RESULT_FAILURE authenticationFailure=${outcome.authenticationFailure} " +
                                 "diagnostic=${outcome.diagnosticSummary ?: "unavailable"}",
                         )
                         attendanceMessage = outcome.message
-                        outcome.diagnosticSummary?.let {
-                            attendanceMessage = "Attendance failed: $it"
-                        }
                         if (outcome.authenticationFailure) {
                             sessionManager.clear()
                             onSetupRequired()
@@ -213,12 +355,18 @@ fun AttendanceScreen(
                     }
                 }
             }.onFailure {
+                recordAttendance(
+                    result = RecognitionLogResult.ERROR,
+                    embeddingGenerated = true,
+                    errorCode = "ATTENDANCE_SUBMIT_ERROR",
+                    errorMessage = it.message,
+                )
                 val summary = safeAttendanceExceptionSummary(it)
                 Log.e(
                     ATTENDANCE_DEBUG_TAG,
                     "SCREEN_EXCEPTION class=${it.javaClass.name} message=$summary",
                 )
-                attendanceMessage = "Attendance failed: $summary"
+                attendanceMessage = "Unable to connect to the attendance server. Please try again."
             }
             submitting = false
             submissionGate.set(false)
@@ -229,7 +377,7 @@ fun AttendanceScreen(
         topBar = {
             TopAppBar(
                 navigationIcon = { TextButton(onClick = onBack) { Text("Back") } },
-                title = { Text("Attendance") },
+                title = { Text(if (action == AttendanceAction.CHECK_IN) "Check In" else "Check Out") },
             )
         },
     ) { paddingValues ->
@@ -275,8 +423,18 @@ fun AttendanceScreen(
                                 attendanceMessage = null
                             }
                         },
-                        onCameraError = { cameraError = it },
-                        onEmbeddingReady = { embedding, _ -> submitEmbedding(embedding) },
+                        onCameraError = {
+                            cameraError = it
+                            if (cameraErrorLogged.compareAndSet(false, true)) {
+                                recordAttendance(
+                                    result = RecognitionLogResult.ERROR,
+                                    embeddingGenerated = false,
+                                    errorCode = "CAMERA_ERROR",
+                                    errorMessage = it,
+                                )
+                            }
+                        },
+                        onEmbeddingReady = { embedding, _, _ -> submitEmbedding(embedding) },
                     )
                 }
                 cameraError?.let {
@@ -316,7 +474,16 @@ fun AttendanceScreen(
             success?.let { result ->
                 Card(modifier = Modifier.fillMaxWidth().padding(12.dp)) {
                     Column(modifier = Modifier.padding(16.dp)) {
-                        Text("Attendance Marked Successfully", style = MaterialTheme.typography.titleMedium)
+                        Text(
+                            when (result.outcome) {
+                                AttendanceOutcome.CHECK_IN_RECORDED -> "Check-In Successful"
+                                AttendanceOutcome.CHECK_OUT_RECORDED -> "Check-Out Successful"
+                                AttendanceOutcome.ALREADY_CHECKED_IN -> "Already Checked In"
+                                AttendanceOutcome.NOT_CHECKED_IN -> "Cannot Check Out"
+                                else -> "Attendance Result"
+                            },
+                            style = MaterialTheme.typography.titleMedium,
+                        )
                         Text(
                             "Employee Name",
                             style = MaterialTheme.typography.labelLarge,
@@ -329,12 +496,38 @@ fun AttendanceScreen(
                             modifier = Modifier.padding(top = 8.dp),
                         )
                         Text(result.employeeCode, style = MaterialTheme.typography.bodyLarge)
-                        Text(
-                            "Check-in Time",
-                            style = MaterialTheme.typography.labelLarge,
-                            modifier = Modifier.padding(top = 8.dp),
-                        )
-                        Text(result.checkInTime, style = MaterialTheme.typography.bodyLarge)
+                        result.checkInTime?.let { checkInTime ->
+                            Text(
+                                "Check-in Time",
+                                style = MaterialTheme.typography.labelLarge,
+                                modifier = Modifier.padding(top = 8.dp),
+                            )
+                            Text(checkInTime, style = MaterialTheme.typography.bodyLarge)
+                        }
+                        result.checkOutTime?.let { checkOutTime ->
+                            Text(
+                                "Check-out Time",
+                                style = MaterialTheme.typography.labelLarge,
+                                modifier = Modifier.padding(top = 8.dp),
+                            )
+                            Text(checkOutTime, style = MaterialTheme.typography.bodyLarge)
+                        }
+                        result.sessionWorkingMinutes?.let { minutes ->
+                            Text(
+                                "Current Session",
+                                style = MaterialTheme.typography.labelLarge,
+                                modifier = Modifier.padding(top = 8.dp),
+                            )
+                            Text(formatWorkingMinutes(minutes), style = MaterialTheme.typography.bodyLarge)
+                        }
+                        result.todayTotalWorkingMinutes?.let { minutes ->
+                            Text(
+                                "Today's Total",
+                                style = MaterialTheme.typography.labelLarge,
+                                modifier = Modifier.padding(top = 8.dp),
+                            )
+                            Text(formatWorkingMinutes(minutes), style = MaterialTheme.typography.bodyLarge)
+                        }
                     }
                 }
             }
@@ -371,4 +564,10 @@ private fun FaceGateStatus.message(): String = when (this) {
     FaceGateStatus.NO_FACE -> "No face detected"
     FaceGateStatus.SINGLE_FACE -> "Keep your face on camera"
     FaceGateStatus.MULTIPLE_FACES -> "Only one person can scan at a time"
+}
+
+private fun formatWorkingMinutes(minutes: Int): String {
+    val hours = minutes / 60
+    val remainingMinutes = minutes % 60
+    return "${hours}h ${remainingMinutes}m"
 }

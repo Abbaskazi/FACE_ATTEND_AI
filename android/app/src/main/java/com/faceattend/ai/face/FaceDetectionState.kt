@@ -14,6 +14,8 @@ data class FaceDetectionState(
     val errorMessage: String? = null,
     val embeddingReady: Boolean = false,
     val alignmentVersion: String? = null,
+    val detectedFaceCount: Int = 0,
+    val selectedFace: com.faceattend.ai.diagnostics.SelectedFaceDiagnostic? = null,
     val livenessStatus: LivenessStatus = LivenessStatus.IDLE,
     val livenessProgress: Int = 0,
     val livenessScore: Float? = null,

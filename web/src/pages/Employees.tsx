@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { FormEvent } from "react";
 import { Copy, Plus, Search, UserRoundPlus, X } from "lucide-react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthProvider";
 import { createEmployee, createEnrollmentSession, getDepartments, getEmployees, getEnrollmentLabel, getEnrollmentSessions, latestEnrollmentByEmployee } from "../lib/data";
 import type { Department, Employee, EnrollmentSession } from "../types/database";
@@ -8,6 +9,8 @@ import { EmptyState, ErrorState, Initials, PageLoader, StatusBadge } from "../co
 
 export default function Employees() {
   const { user } = useAuth();
+  const location = useLocation();
+  const navigate = useNavigate();
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
   const [enrollments, setEnrollments] = useState<Map<string, EnrollmentSession>>(new Map());
@@ -85,8 +88,13 @@ export default function Employees() {
   if (loading) return <PageLoader label="Loading employees…" />;
   if (error) return <ErrorState message={error} onRetry={() => void loadEmployees()} />;
 
+  const deletionNotice = (location.state as { employeeDeleted?: boolean } | null)?.employeeDeleted
+    ? "Employee deleted successfully."
+    : "";
+
   return (
     <div className="page-stack">
+      {deletionNotice && <div className="form-success" role="status">{deletionNotice}<button className="notice-dismiss" type="button" onClick={() => navigate(location.pathname, { replace: true, state: null })}>Dismiss</button></div>}
       <section className="toolbar panel">
         <div className="search-field"><Search size={17} /><input aria-label="Search employees" placeholder="Search by name, code, or department" value={search} onChange={(event) => setSearch(event.target.value)} /></div>
         <button className="button button-primary" onClick={() => setDialogOpen(true)}><Plus size={17} /> Add employee</button>
@@ -100,7 +108,7 @@ export default function Employees() {
           <div className="table-scroll"><table><thead><tr><th>Employee</th><th>Department</th><th>Status</th><th>Enrollment</th><th>Contact</th></tr></thead><tbody>
             {filteredEmployees.map((employee) => {
               const enrollment = getEnrollmentLabel(enrollments.get(employee.id));
-              return <tr key={employee.id}><td><div className="person-cell"><Initials name={employee.full_name} /><div><strong>{employee.full_name}</strong><span>{employee.employee_code}{employee.designation ? ` · ${employee.designation}` : ""}</span></div></div></td><td>{employee.departments ? <div><strong className="table-primary">{employee.departments.name}</strong><span className="table-secondary">{employee.departments.code}</span></div> : <span className="muted">Unassigned</span>}</td><td><StatusBadge tone={employee.status === "ACTIVE" ? "success" : employee.status === "SUSPENDED" ? "danger" : "muted"}>{employee.status}</StatusBadge></td><td><div><StatusBadge tone={enrollment.tone}>{enrollment.label}</StatusBadge>{employee.status === "ACTIVE" && enrollment.label !== "Enrolled" && <button className="button button-secondary button-small" disabled={sessionCreatingFor === employee.id} onClick={() => void handleCreateSession(employee)}>{sessionCreatingFor === employee.id ? "Creating…" : "Create session"}</button>}</div></td><td><span className="table-secondary">{employee.email ?? employee.phone ?? "No contact details"}</span></td></tr>;
+              return <tr key={employee.id}><td><div className="person-cell"><Initials name={employee.full_name} /><div><strong><Link className="employee-name-link" to={`/employees/${employee.id}/attendance`}>{employee.full_name}</Link></strong><span>{employee.employee_code}{employee.designation ? ` · ${employee.designation}` : ""}</span></div></div></td><td>{employee.departments ? <div><strong className="table-primary">{employee.departments.name}</strong><span className="table-secondary">{employee.departments.code}</span></div> : <span className="muted">Unassigned</span>}</td><td><StatusBadge tone={employee.status === "ACTIVE" ? "success" : employee.status === "SUSPENDED" ? "danger" : "muted"}>{employee.status}</StatusBadge></td><td><div><StatusBadge tone={enrollment.tone}>{enrollment.label}</StatusBadge>{employee.status === "ACTIVE" && enrollment.label !== "Enrolled" && <button className="button button-secondary button-small" disabled={sessionCreatingFor === employee.id} onClick={() => void handleCreateSession(employee)}>{sessionCreatingFor === employee.id ? "Creating…" : "Create session"}</button>}</div></td><td><span className="table-secondary">{employee.email ?? employee.phone ?? "No contact details"}</span></td></tr>;
             })}
           </tbody></table></div>
         )}

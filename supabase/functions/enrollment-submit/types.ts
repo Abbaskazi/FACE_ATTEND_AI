@@ -9,7 +9,18 @@ export interface EnrollmentSubmitBody {
 export interface EnrollmentSubmitResponse {
   ok: boolean;
   completed_at?: string;
+  error_code?: EnrollmentValidationErrorCode;
 }
+
+export type EnrollmentValidationErrorCode =
+  | "INVALID_REQUEST"
+  | "INVALID_SESSION_TOKEN"
+  | "INVALID_EMBEDDING"
+  | "INVALID_EMBEDDING_LENGTH"
+  | "INVALID_MODEL"
+  | "INVALID_MODEL_VERSION"
+  | "INVALID_APP_VERSION"
+  | "INVALID_NORMALIZATION";
 
 export interface EnrollmentDevice {
   id: string;

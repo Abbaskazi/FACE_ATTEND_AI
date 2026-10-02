@@ -44,6 +44,12 @@ android {
             applicationIdSuffix = ".debug"
             versionNameSuffix = "-debug"
         }
+        create("resnet100Test") {
+            initWith(getByName("debug"))
+            applicationIdSuffix = ".resnet100test"
+            versionNameSuffix = "-resnet100test"
+            matchingFallbacks += listOf("debug")
+        }
     }
 
     compileOptions {

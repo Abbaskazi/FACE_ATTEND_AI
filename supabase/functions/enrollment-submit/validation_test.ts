@@ -7,8 +7,8 @@ const validEmbedding = Array.from({ length: 512 }, (_, index) => index === 0 ? 1
 const validBody = () => ({
   session_token: token,
   embedding: validEmbedding,
-  model_name: "w600k_mbf.onnx",
-  model_version: "verified-model-v1",
+  model_name: "glintr100.onnx",
+  model_version: "4ab1d6435d639628a6f3e5008dd4f929edf4c4124b1a7169e1048f9fef534cdf",
   app_version: "0.1.0",
 });
 
@@ -20,6 +20,10 @@ Deno.test("rejects non-finite embedding values", () => {
   const embedding = [...validEmbedding];
   embedding[12] = Number.NaN;
   assertThrows(() => parseEnrollmentBody({ ...validBody(), embedding }), Error, "invalid_embedding_value");
+});
+
+Deno.test("rejects the retired multi-sample field", () => {
+  assertThrows(() => parseEnrollmentBody({ ...validBody(), sample_index: 0 }), Error, "unexpected_field");
 });
 
 Deno.test("rejects expired sessions", () => {
@@ -51,10 +55,11 @@ Deno.test("accepts the successful enrollment state", () => {
   assertEquals(session.status, "PENDING");
 });
 
-Deno.test("rejects duplicate enrollment protection", () => {
-  assertThrows(() => assertEnrollmentState({
+Deno.test("allows re-enrollment when the selected employee already has a template", () => {
+  const session = assertEnrollmentState({
     session: { id: "s", employee_id: "e", status: "PENDING", expires_at: "2099-01-01T00:00:00Z" },
     employeeIsActive: true,
     templateExists: true,
-  }), Error, "employee_already_enrolled");
+  });
+  assertEquals(session.status, "PENDING");
 });

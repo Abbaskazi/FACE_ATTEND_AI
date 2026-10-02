@@ -21,6 +21,5 @@ export function assertEnrollmentState(
     throw new Error("enrollment_session_expired");
   }
   if (!state.employeeIsActive) throw new Error("employee_not_active");
-  if (state.templateExists) throw new Error("employee_already_enrolled");
   return state.session;
 }

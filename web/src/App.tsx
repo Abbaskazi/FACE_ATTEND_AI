@@ -6,6 +6,7 @@ import Attendance from "./pages/Attendance";
 import Dashboard from "./pages/Dashboard";
 import Departments from "./pages/Departments";
 import Employees from "./pages/Employees";
+import EmployeeAttendance from "./pages/EmployeeAttendance";
 import Login from "./pages/Login";
 import Reports from "./pages/Reports";
 
@@ -19,6 +20,7 @@ function App() {
             <Route element={<AppShell />}>
               <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/employees" element={<Employees />} />
+              <Route path="/employees/:employeeId/attendance" element={<EmployeeAttendance />} />
               <Route path="/departments" element={<Departments />} />
               <Route path="/attendance" element={<Attendance />} />
               <Route path="/reports" element={<Reports />} />

@@ -11,22 +11,37 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.faceattend.ai.FaceAttendApplication
+import com.faceattend.ai.attendance.AttendanceAction
+import com.faceattend.ai.diagnostics.RecognitionLogDetailScreen
+import com.faceattend.ai.diagnostics.RecognitionLogsScreen
+import com.faceattend.ai.diagnostics.EnrollmentInputDiagnosticsScreen
 import com.faceattend.ai.ui.attendance.AttendanceScreen
 import com.faceattend.ai.ui.device.DeviceSetupScreen
 import com.faceattend.ai.ui.enrollment.EnrollmentScreen
 import com.faceattend.ai.ui.home.HomeScreen
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import androidx.navigation.NavType
+import androidx.navigation.navArgument
+import androidx.compose.material3.ExperimentalMaterial3Api
 
 private const val HOME = "home"
-private const val ATTENDANCE = "attendance"
+private const val CHECK_IN = "check-in"
+private const val CHECK_OUT = "check-out"
 private const val ENROLLMENT = "enrollment"
 private const val DEVICE_SETUP = "device-setup"
+private const val RECOGNITION_LOGS = "recognition-logs"
+private const val ENROLLMENT_INPUT_DIAGNOSTICS = "enrollment-input-diagnostics"
+private const val RECOGNITION_LOG_DETAIL = "recognition-log/{logId}"
 
 @Composable
+@OptIn(ExperimentalMaterial3Api::class)
 fun AppNavigation() {
     val context = LocalContext.current
-    val sessionManager = (context.applicationContext as FaceAttendApplication).deviceSessionManager
+    val application = context.applicationContext as FaceAttendApplication
+    val sessionManager = application.deviceSessionManager
+    val recognitionLogRepository = application.recognitionLogRepository
+    val enrollmentInputDiagnosticRepository = application.enrollmentInputDiagnosticRepository
     val navController = rememberNavController()
     var sessionRestored by remember { mutableStateOf(false) }
 
@@ -44,12 +59,16 @@ fun AppNavigation() {
     NavHost(navController = navController, startDestination = startDestination) {
         composable(HOME) {
             HomeScreen(
-                onStartAttendance = {
-                    navController.navigate(if (sessionManager.hasSession()) ATTENDANCE else DEVICE_SETUP)
+                onStartCheckIn = {
+                    navController.navigate(if (sessionManager.hasSession()) CHECK_IN else DEVICE_SETUP)
+                },
+                onStartCheckOut = {
+                    navController.navigate(if (sessionManager.hasSession()) CHECK_OUT else DEVICE_SETUP)
                 },
                 onStartEnrollment = {
                     navController.navigate(if (sessionManager.hasSession()) ENROLLMENT else DEVICE_SETUP)
                 },
+                onOpenRecognitionLogs = { navController.navigate(RECOGNITION_LOGS) },
             )
         }
         composable(DEVICE_SETUP) {
@@ -62,13 +81,26 @@ fun AppNavigation() {
                 },
             )
         }
-        composable(ATTENDANCE) {
+        composable(CHECK_IN) {
             AttendanceScreen(
                 sessionManager = sessionManager,
+                action = AttendanceAction.CHECK_IN,
                 onBack = { navController.popBackStack() },
                 onSetupRequired = {
                     navController.navigate(DEVICE_SETUP) { launchSingleTop = true }
                 },
+                recognitionLogRepository = recognitionLogRepository,
+            )
+        }
+        composable(CHECK_OUT) {
+            AttendanceScreen(
+                sessionManager = sessionManager,
+                action = AttendanceAction.CHECK_OUT,
+                onBack = { navController.popBackStack() },
+                onSetupRequired = {
+                    navController.navigate(DEVICE_SETUP) { launchSingleTop = true }
+                },
+                recognitionLogRepository = recognitionLogRepository,
             )
         }
         composable(ENROLLMENT) {
@@ -79,6 +111,33 @@ fun AppNavigation() {
                 onSetupRequired = {
                     navController.navigate(DEVICE_SETUP) { launchSingleTop = true }
                 },
+                recognitionLogRepository = recognitionLogRepository,
+            )
+        }
+        composable(RECOGNITION_LOGS) {
+            RecognitionLogsScreen(
+                repository = recognitionLogRepository,
+                onBack = { navController.popBackStack() },
+                onOpenEnrollmentDiagnostics = { navController.navigate(ENROLLMENT_INPUT_DIAGNOSTICS) },
+                onOpenLog = { logId ->
+                    navController.navigate("recognition-log/$logId")
+                },
+            )
+        }
+        composable(ENROLLMENT_INPUT_DIAGNOSTICS) {
+            EnrollmentInputDiagnosticsScreen(
+                repository = enrollmentInputDiagnosticRepository,
+                onBack = { navController.popBackStack() },
+            )
+        }
+        composable(
+            route = RECOGNITION_LOG_DETAIL,
+            arguments = listOf(navArgument("logId") { type = NavType.StringType }),
+        ) { entry ->
+            val log = recognitionLogRepository.find(entry.arguments?.getString("logId").orEmpty())
+            RecognitionLogDetailScreen(
+                log = log,
+                onBack = { navController.popBackStack() },
             )
         }
     }

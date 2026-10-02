@@ -40,7 +40,11 @@ export default function AppShell() {
   const [profile, setProfile] = useState<AdminProfile | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
-  const page = pageTitles[location.pathname] ?? pageTitles["/dashboard"];
+  const page = pageTitles[location.pathname] ?? (
+    location.pathname.startsWith("/employees/")
+      ? { title: "Employee attendance", eyebrow: "People directory" }
+      : pageTitles["/dashboard"]
+  );
 
   useEffect(() => {
     if (!user) return;

@@ -53,6 +53,8 @@
 .button:disabled { cursor: not-allowed; opacity: .55; }
 .button-primary { color: white; background: var(--purple); box-shadow: 0 6px 12px rgba(104,98,201,.18); }
 .button-primary:hover:not(:disabled) { background: #5954b5; box-shadow: 0 8px 16px rgba(104,98,201,.24); }
+.button-danger { color: white; background: #b34c5a; box-shadow: 0 6px 12px rgba(179,76,90,.16); }
+.button-danger:hover:not(:disabled) { background: #9f3f4d; box-shadow: 0 8px 16px rgba(179,76,90,.22); }
 .button-secondary { border-color: var(--line); color: #555f72; background: white; }
 .button-secondary:hover:not(:disabled) { border-color: #c6cada; background: var(--surface-soft); }
 .button-ghost { border-color: transparent; color: var(--muted); background: transparent; }
@@ -107,6 +109,8 @@ tbody tr:hover { background: #fafbfe; }
 .person-cell > div:last-child, td > div { display: grid; gap: 3px; }
 .person-cell strong, .table-primary { color: #3d4657; font-size: 11px; font-weight: 700; }
 .person-cell span, .table-secondary { color: var(--subtle); font-size: 10px; }
+.employee-name-link { color: inherit; text-decoration: none; }
+.employee-name-link:hover { color: var(--purple); text-decoration: underline; text-underline-offset: 3px; }
 .muted { color: var(--subtle); }
 .time-cell { color: #3d4657; font-variant-numeric: tabular-nums; }
 .status-badge { display: inline-flex; align-items: center; min-height: 21px; padding: 0 8px; border-radius: 20px; font-size: 9px; font-weight: 700; letter-spacing: .03em; white-space: nowrap; }
@@ -115,6 +119,68 @@ tbody tr:hover { background: #fafbfe; }
 .status-muted { color: #6f7989; background: #f0f2f6; }
 .status-danger { color: #b34c5a; background: var(--red-soft); }
 .status-info { color: #52709e; background: #eaf2fc; }
+
+/* Employee attendance calendar */
+.employee-profile { display: flex; align-items: center; justify-content: space-between; gap: 28px; padding: 22px 24px; }
+.employee-profile-main { display: flex; align-items: center; gap: 14px; min-width: 0; }
+.employee-profile-avatar { width: 50px; height: 50px; display: grid; place-items: center; flex: 0 0 auto; border-radius: 14px; color: #5d56ae; background: var(--purple-soft); font: 800 16px 'Plus Jakarta Sans', sans-serif; }
+.employee-profile h2 { color: var(--ink); font-size: 18px; letter-spacing: -.4px; }
+.employee-profile p { margin-top: 5px; color: var(--muted); font-size: 11px; }
+.employee-profile-details { display: flex; gap: 29px; }
+.employee-profile-details div { display: grid; gap: 4px; min-width: 105px; }
+.employee-profile-details span { color: var(--subtle); font-size: 10px; }
+.employee-profile-details strong { color: #3d4657; font-size: 11px; }
+.employee-profile-actions { margin-left: auto; }
+.employee-month-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 17px 21px; }
+.employee-month-toolbar h2 { color: var(--ink); font-size: 17px; letter-spacing: -.3px; }
+.month-controls { display: flex; align-items: center; gap: 8px; }
+.employee-attendance-metrics { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.salary-panel { overflow: hidden; }
+.salary-panel .panel-header { align-items: center; }
+.salary-earned { display: grid; gap: 4px; min-width: 190px; text-align: right; }
+.salary-earned span, .salary-earned small { color: var(--subtle); font-size: 10px; }
+.salary-earned strong { color: var(--ink); font-size: 20px; letter-spacing: -.4px; }
+.salary-breakdown { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin: 0 23px 20px; padding: 14px 15px; border: 1px solid #f0f1f5; border-radius: 8px; background: var(--surface-soft); }
+.salary-breakdown div { display: grid; gap: 4px; }
+.salary-breakdown span { color: var(--subtle); font-size: 10px; }
+.salary-breakdown strong { color: #3d4657; font-size: 12px; }
+.salary-form { display: flex; align-items: flex-end; gap: 13px; padding: 0 23px 21px; }
+.salary-form > label { display: grid; gap: 6px; color: #737d8f; font-size: 10px; font-weight: 700; }
+.salary-form-controls { display: flex; align-items: center; gap: 9px; }
+.salary-input-wrap { display: flex; align-items: center; height: 37px; border: 1px solid var(--line); border-radius: 7px; color: var(--muted); background: white; }
+.salary-input-wrap:focus-within { border-color: #a5a0e9; box-shadow: 0 0 0 3px rgba(104,98,201,.1); }
+.salary-input-wrap span { padding-left: 10px; font-size: 12px; }
+.salary-input-wrap input { width: 145px; height: 35px; padding: 0 10px 0 6px; border: 0; outline: 0; color: #3d4657; background: transparent; font-size: 11px; }
+.form-success { display: flex; align-items: center; gap: 8px; padding: 10px 11px; border-radius: 7px; color: #247552; background: #eaf8f0; font-size: 11px; line-height: 1.4; }
+.calendar-panel { overflow: hidden; }
+.calendar-panel-header { align-items: center; }
+.calendar-legend { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 11px 15px; color: var(--muted); font-size: 10px; }
+.calendar-legend span { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
+.legend-swatch { width: 9px; height: 9px; display: inline-block; border-radius: 3px; border: 1px solid transparent; }
+.legend-present { background: #bcebd6; border-color: #76caa5; }
+.legend-absent { background: #ffd8dc; border-color: #e99da7; }
+.legend-holiday { background: #e7edf4; border-color: #bdc8d6; }
+.legend-future { background: #f4f5f7; border-color: #d9dde5; }
+.calendar-content { padding: 0 23px 23px; }
+.calendar-weekdays, .attendance-calendar { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 7px; }
+.calendar-weekdays { margin-bottom: 7px; }
+.calendar-weekdays span { padding: 5px 7px; color: var(--subtle); font-size: 9px; font-weight: 700; letter-spacing: .08em; text-align: center; text-transform: uppercase; }
+.calendar-day { min-height: 74px; padding: 9px 8px; border: 1px solid transparent; border-radius: 8px; text-align: left; transition: border-color .15s, transform .15s, box-shadow .15s; }
+button.calendar-day { cursor: pointer; }
+button.calendar-day:hover { transform: translateY(-1px); border-color: #b5b8dd; box-shadow: 0 5px 12px rgba(29, 43, 74, .08); }
+.calendar-day > span { display: block; color: #3d4657; font: 700 12px 'Plus Jakarta Sans', sans-serif; }
+.calendar-day small { display: block; margin-top: 22px; color: inherit; font-size: 9px; opacity: .8; }
+.calendar-day-present { color: #237654; background: var(--green-soft); border-color: #c6eddc; }
+.calendar-day-absent { color: #ad4e5b; background: var(--red-soft); border-color: #f4d5d8; }
+.calendar-day-holiday { color: #62748b; background: #eef2f6; border-color: #e0e6ed; }
+.calendar-day-future { color: #9da5b2; background: #f7f8fa; border-color: #eef0f3; }
+.calendar-day-future > span { color: #9da5b2; }
+.calendar-day-empty { min-height: 74px; background: transparent; }
+.calendar-day-selected { outline: 2px solid var(--purple); outline-offset: 1px; }
+.calendar-day-detail { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-top: 17px; padding: 13px 15px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface-soft); }
+.calendar-day-detail > div { display: flex; align-items: center; gap: 9px; }
+.calendar-day-detail strong { color: var(--ink); font-size: 11px; }
+.calendar-day-detail p { color: var(--muted); font-size: 10px; }
 .state-card { display: flex; align-items: flex-start; gap: 12px; min-height: 150px; margin: 0; padding: 30px 23px; color: var(--muted); }
 .state-card strong { display: block; margin-bottom: 5px; color: #444d5f; font-size: 12px; }
 .state-card p { max-width: 430px; font-size: 11px; line-height: 1.6; }
@@ -176,6 +242,13 @@ tbody tr:hover { background: #fafbfe; }
 .modal-form input, .modal-form select { width: 100%; }
 .modal-actions { display: flex; justify-content: flex-end; gap: 9px; margin-top: 23px; padding-top: 18px; border-top: 1px solid #f0f1f5; }
 .form-error { display: flex; align-items: center; gap: 8px; margin-top: 14px; padding: 10px 11px; border-radius: 7px; color: #b34c5a; background: var(--red-soft); font-size: 11px; line-height: 1.4; }
+.delete-modal { width: min(100%, 500px); }
+.delete-modal-body { padding: 21px 24px 23px; }
+.eyebrow-danger { color: #b34c5a; }
+.delete-employee-summary { display: grid; gap: 5px; padding: 14px 15px; border: 1px solid #f0d9dd; border-radius: 8px; background: #fff7f8; }
+.delete-employee-summary strong { color: var(--ink); font-size: 14px; }
+.delete-employee-summary span { color: var(--muted); font-size: 11px; }
+.delete-warning { margin-top: 16px; color: #6b4a50; font-size: 11px; line-height: 1.6; }
 
 /* Login */
 .login-page { display: grid; grid-template-columns: 43% 57%; min-height: 100vh; background: white; }
@@ -230,6 +303,18 @@ tbody tr:hover { background: #fafbfe; }
   .page-intro { align-items: flex-start; margin-bottom: 21px; }
   .page-date { display: none; }
   .dashboard-grid { grid-template-columns: 1fr; }
+  .employee-profile { align-items: flex-start; flex-direction: column; }
+  .employee-profile-details { width: 100%; flex-wrap: wrap; gap: 14px 24px; }
+  .employee-profile-actions { margin-left: 0; }
+  .salary-panel .panel-header { align-items: flex-start; flex-direction: column; }
+  .salary-earned { width: 100%; text-align: left; }
+  .salary-breakdown { width: calc(100% - 34px); grid-template-columns: repeat(2, minmax(0, 1fr)); margin-right: 17px; margin-left: 17px; }
+  .salary-form { align-items: stretch; flex-direction: column; padding-right: 17px; padding-left: 17px; }
+  .salary-form-controls { width: 100%; }
+  .salary-input-wrap { flex: 1; }
+  .salary-input-wrap input { width: 100%; }
+  .calendar-panel-header { align-items: flex-start; flex-direction: column; }
+  .calendar-legend { justify-content: flex-start; }
   .filters { align-items: stretch; flex-wrap: wrap; }
   .filter-heading { width: 100%; padding: 0; }
   .filters label { flex: 1; }
@@ -257,8 +342,17 @@ tbody tr:hover { background: #fafbfe; }
   th, td { padding-right: 16px; padding-left: 16px; }
   .form-grid { grid-template-columns: 1fr; }
   .modal-form, .modal-header { padding-right: 18px; padding-left: 18px; }
+  .delete-modal-body { padding-right: 18px; padding-left: 18px; }
   .report-hero { padding: 18px; }
   .report-hero-icon { display: none; }
   .report-stat { padding: 13px; }
   .report-stat strong { font-size: 19px; }
+  .employee-month-toolbar { align-items: flex-start; flex-direction: column; }
+  .month-controls { width: 100%; justify-content: space-between; }
+  .calendar-content { padding-right: 12px; padding-left: 12px; }
+  .calendar-weekdays, .attendance-calendar { gap: 4px; }
+  .calendar-day { min-height: 57px; padding: 7px 5px; }
+  .calendar-day small { margin-top: 15px; font-size: 8px; }
+  .calendar-day-empty { min-height: 57px; }
+  .calendar-day-detail { align-items: flex-start; flex-direction: column; gap: 7px; }
 }

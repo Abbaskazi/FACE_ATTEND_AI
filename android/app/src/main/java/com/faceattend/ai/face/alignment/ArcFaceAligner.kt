@@ -83,7 +83,12 @@ class ArcFaceAligner(
                 matrix,
                 Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG),
             )
-            return AlignedFace(output, version)
+            return AlignedFace(
+                bitmap = output,
+                alignmentVersion = version,
+                sourceLandmarks = imageOrderedLandmarks,
+                targetLandmarks = ArcFaceCanonicalTemplate.points,
+            )
         } finally {
             if (renderSource !== oriented) renderSource.recycle()
             if (oriented !== frame) oriented.recycle()

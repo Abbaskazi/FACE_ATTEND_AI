@@ -1,6 +1,7 @@
 package com.faceattend.ai.face.embedding
 
 import java.io.ByteArrayInputStream
+import java.io.ByteArrayOutputStream
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
@@ -17,6 +18,20 @@ class ModelHashVerifierTest {
     @Test
     fun acceptsExpectedHashCaseInsensitively() {
         ModelHashVerifier.requireSha256("ABC", "abc")
+    }
+
+    @Test
+    fun copiesAndHashesAsAStream() {
+        val source = "FaceAttend streamed model bytes".repeat(4096).toByteArray()
+        val output = ByteArrayOutputStream()
+
+        val hash = ModelHashVerifier.copySha256(ByteArrayInputStream(source), output)
+
+        assertEquals(
+            ModelHashVerifier.sha256Hex(ByteArrayInputStream(source)),
+            hash,
+        )
+        assertEquals(source.toList(), output.toByteArray().toList())
     }
 
     @Test(expected = IllegalArgumentException::class)
