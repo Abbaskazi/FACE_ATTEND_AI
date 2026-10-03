@@ -1,0 +1,10 @@
+# Only the employee login broker is intentionally public. It performs its own
+# employee/status/account checks and never exposes the service-role key.
+[functions.employee-login]
+verify_jwt = false
+
+# Recovery starts before an employee has an authenticated session. The
+# function performs its own generic-response, rate-limit, OTP, and server-side
+# account checks; the service-role key remains function-only.
+[functions.employee-password-recovery]
+verify_jwt = false

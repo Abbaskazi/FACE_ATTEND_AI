@@ -57,7 +57,8 @@ export function Initials({ name }: { name: string }) {
 
 export function formatDate(value: string | null) {
   if (!value) return "—";
-  return new Intl.DateTimeFormat(undefined, { dateStyle: "medium" }).format(new Date(`${value}T00:00:00`));
+  const [year, month, day] = value.split("-").map(Number);
+  return new Intl.DateTimeFormat(undefined, { dateStyle: "medium" }).format(new Date(year, month - 1, day));
 }
 
 export function formatDateTime(value: string | null) {

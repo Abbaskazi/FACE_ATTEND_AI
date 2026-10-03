@@ -4,6 +4,8 @@ export const MAX_MONTHLY_SALARY = 9_999_999_999.99;
 
 export interface EarnedSalary {
   presentDays: number;
+  paidLeaveDays: number;
+  paidDays: number;
   totalWorkingDays: number;
   dailySalary: number;
   earnedSalary: number;
@@ -27,9 +29,9 @@ export function getTotalWorkingDays(month: string) {
 }
 
 /**
- * Uses the employee calendar's established present-day semantics. The
- * calendar counts one present day per date with a check-in and excludes
- * Fridays, future dates, and dates before joining.
+ * Uses the employee calendar's server-provided attendance statuses. The
+ * salary denominator is every date in the selected month except Friday;
+ * paid days are only applicable PRESENT and LEAVE dates through today.
  */
 export function calculateEarnedSalary(
   monthlySalary: number,
@@ -37,13 +39,15 @@ export function calculateEarnedSalary(
 ): EarnedSalary {
   const safeMonthlySalary = Number.isFinite(monthlySalary) && monthlySalary >= 0 ? monthlySalary : 0;
   const presentDays = calendar.presentDays;
+  const paidLeaveDays = calendar.paidLeaveDays;
+  const paidDays = calendar.paidDays;
   const totalWorkingDays = getTotalWorkingDays(calendar.month);
   const dailySalary = totalWorkingDays > 0 ? safeMonthlySalary / totalWorkingDays : 0;
   const earnedSalary = totalWorkingDays > 0
-    ? roundCurrency(dailySalary * presentDays)
+    ? roundCurrency(dailySalary * paidDays)
     : 0;
 
-  return { presentDays, totalWorkingDays, dailySalary, earnedSalary };
+  return { presentDays, paidLeaveDays, paidDays, totalWorkingDays, dailySalary, earnedSalary };
 }
 
 export function parseMonthlySalary(value: string): number | null {

@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { FormEvent } from "react";
-import { ArrowLeft, CalendarDays, ChevronLeft, ChevronRight, Clock3, RotateCcw, Save, Trash2, X } from "lucide-react";
+import { ArrowLeft, CalendarDays, ChevronLeft, ChevronRight, Clock3, Edit3, RotateCcw, Save, Trash2, X } from "lucide-react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "../auth/AuthProvider";
-import { deleteEmployee, getAdminProfile, getEmployee, getEmployeeAttendance, updateEmployeeSalary } from "../lib/data";
+import { deleteEmployee, getAdminEmployeeLeaveRequests, getAdminProfile, getDepartments, getEmployee, getEmployeeAttendance, updateEmployeeContact, updateEmployeeProfile, updateEmployeeSalary } from "../lib/data";
 import {
   buildAttendanceCalendar,
   getCurrentMonth,
@@ -12,18 +12,52 @@ import {
   shiftMonth,
   type CalendarDay,
 } from "../lib/attendanceCalendar";
-import { EmptyState, ErrorState, formatDate, PageLoader, StatusBadge } from "../components/ui";
-import type { AttendanceRecord, Employee } from "../types/database";
+import { EmptyState, ErrorState, formatDate, formatDateTime, PageLoader, StatusBadge } from "../components/ui";
+import type { AttendanceRecord, Department, Employee, EmployeeStatus, LeaveRequest, LeaveRequestStatus } from "../types/database";
+import { getApprovedLeaveDates } from "../lib/leave";
+import { getHolidaysForMonth } from "../lib/holidays";
 import { calculateEarnedSalary, formatInr, formatSalaryInput, parseMonthlySalary } from "../lib/payroll";
+import type { Holiday } from "../types/database";
 
 const weekdayLabels = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
+type EmployeeEditForm = {
+  employee_code: string;
+  full_name: string;
+  email: string;
+  phone: string;
+  department_id: string;
+  designation: string;
+  joining_date: string;
+  salary: string;
+  status: EmployeeStatus;
+};
+
+function editFormFor(employee: Employee): EmployeeEditForm {
+  return {
+    employee_code: employee.employee_code,
+    full_name: employee.full_name,
+    email: employee.email ?? "",
+    phone: employee.phone ?? "",
+    department_id: employee.department_id ?? "",
+    designation: employee.designation ?? "",
+    joining_date: employee.joining_date ?? "",
+    salary: formatSalaryInput(employee.salary),
+    status: employee.status,
+  };
+}
+
 function statusLabel(day: CalendarDay) {
+  if (day.status === "HOLIDAY" && day.holiday) return "Holiday";
   switch (day.status) {
     case "PRESENT":
       return "Present";
     case "ABSENT":
       return "Absent";
+    case "HALF_DAY":
+      return "Half day";
+    case "LEAVE":
+      return "Paid leave";
     case "HOLIDAY":
       return "Weekly Holiday";
     case "FUTURE":
@@ -31,17 +65,37 @@ function statusLabel(day: CalendarDay) {
   }
 }
 
-function statusTone(day: CalendarDay): "success" | "danger" | "muted" | "info" {
+function statusTone(day: CalendarDay): "success" | "danger" | "muted" | "info" | "warning" {
   switch (day.status) {
     case "PRESENT":
       return "success";
     case "ABSENT":
       return "danger";
+    case "HALF_DAY":
+      return "warning";
+    case "LEAVE":
+      return "info";
     case "HOLIDAY":
       return "info";
     case "FUTURE":
       return "muted";
   }
+}
+
+function leaveStatusTone(status: LeaveRequestStatus): "success" | "warning" | "muted" | "danger" {
+  switch (status) {
+    case "APPROVED": return "success";
+    case "PENDING": return "warning";
+    case "REJECTED": return "danger";
+    case "CANCELLED": return "muted";
+  }
+}
+
+function leaveDecisionDate(status: LeaveRequestStatus, request: { approved_at: string | null; rejected_at: string | null; cancelled_at: string | null }) {
+  if (status === "APPROVED") return request.approved_at;
+  if (status === "REJECTED") return request.rejected_at;
+  if (status === "CANCELLED") return request.cancelled_at;
+  return null;
 }
 
 export default function EmployeeAttendance() {
@@ -50,6 +104,9 @@ export default function EmployeeAttendance() {
   const navigate = useNavigate();
   const [employee, setEmployee] = useState<Employee | null>(null);
   const [records, setRecords] = useState<AttendanceRecord[]>([]);
+  const [leaveRequests, setLeaveRequests] = useState<LeaveRequest[]>([]);
+  const [holidays, setHolidays] = useState<Holiday[]>([]);
+  const [departments, setDepartments] = useState<Department[]>([]);
   const [selectedMonth, setSelectedMonth] = useState(getCurrentMonth);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -60,7 +117,17 @@ export default function EmployeeAttendance() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState("");
+  const [contactEmail, setContactEmail] = useState("");
+  const [contactPhone, setContactPhone] = useState("");
+  const [contactSaving, setContactSaving] = useState(false);
+  const [contactFeedback, setContactFeedback] = useState<{ tone: "success" | "error"; message: string } | null>(null);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [editSaving, setEditSaving] = useState(false);
+  const [editFeedback, setEditFeedback] = useState<{ tone: "success" | "error"; message: string } | null>(null);
+  const [profileFeedback, setProfileFeedback] = useState<{ tone: "success" | "error"; message: string } | null>(null);
+  const [editForm, setEditForm] = useState<EmployeeEditForm>({ employee_code: "", full_name: "", email: "", phone: "", department_id: "", designation: "", joining_date: "", salary: "0", status: "ACTIVE" });
   const salaryEmployeeRef = useRef<string | null>(null);
+  const contactEmployeeRef = useRef<string | null>(null);
 
   const loadDetails = useCallback(async () => {
     if (!user) {
@@ -82,9 +149,12 @@ export default function EmployeeAttendance() {
     try {
       const adminProfile = await getAdminProfile(user.id);
       if (!adminProfile?.is_active) throw new Error("Active administrator access is required.");
-      const [employeeRow, attendanceRows] = await Promise.all([
+      const [employeeRow, attendanceRows, leaveRows, departmentRows, holidayRows] = await Promise.all([
         getEmployee(employeeId),
         getEmployeeAttendance(employeeId, { from, to }),
+        getAdminEmployeeLeaveRequests(employeeId),
+        getDepartments(),
+        getHolidaysForMonth(selectedMonth),
       ]);
       if (!employeeRow) throw new Error("Employee could not be found or is not available to this administrator.");
       if (salaryEmployeeRef.current !== employeeRow.id) {
@@ -92,8 +162,18 @@ export default function EmployeeAttendance() {
         setSalaryInput(formatSalaryInput(employeeRow.salary));
         setSalaryFeedback(null);
       }
+      if (contactEmployeeRef.current !== employeeRow.id) {
+        contactEmployeeRef.current = employeeRow.id;
+        setContactEmail(employeeRow.email ?? "");
+        setContactPhone(employeeRow.phone ?? "");
+        setContactFeedback(null);
+      }
+      setEditForm(editFormFor(employeeRow));
       setEmployee(employeeRow);
       setRecords(attendanceRows);
+      setLeaveRequests(leaveRows);
+      setDepartments(departmentRows);
+      setHolidays(holidayRows);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Please try again in a moment.");
     } finally {
@@ -105,9 +185,10 @@ export default function EmployeeAttendance() {
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { void loadDetails(); }, [loadDetails]);
 
+  const approvedLeaveDates = useMemo(() => [...getApprovedLeaveDates(leaveRequests, holidays)], [holidays, leaveRequests]);
   const calendar = useMemo(
-    () => buildAttendanceCalendar(selectedMonth, records, employee?.joining_date ?? null),
-    [employee?.joining_date, records, selectedMonth],
+    () => buildAttendanceCalendar(selectedMonth, records, employee?.joining_date ?? null, undefined, approvedLeaveDates, holidays),
+    [approvedLeaveDates, employee?.joining_date, holidays, records, selectedMonth],
   );
   const leadingCells = getMonthWeekdayOffset(selectedMonth);
   const trailingCells = (7 - ((leadingCells + calendar.days.length) % 7)) % 7;
@@ -142,6 +223,84 @@ export default function EmployeeAttendance() {
     }
   };
 
+  const handleSaveContact = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!employee) return;
+    setContactSaving(true);
+    setContactFeedback(null);
+    try {
+      const updatedEmployee = await updateEmployeeContact(employee.id, {
+        email: contactEmail.trim() || null,
+        phone: contactPhone.trim() || null,
+      });
+      setEmployee(updatedEmployee);
+      setContactEmail(updatedEmployee.email ?? "");
+      setContactPhone(updatedEmployee.phone ?? "");
+      setContactFeedback({ tone: "success", message: "Contact information saved." });
+    } catch (cause) {
+      setContactFeedback({ tone: "error", message: cause instanceof Error ? cause.message : "Contact information could not be saved." });
+    } finally {
+      setContactSaving(false);
+    }
+  };
+
+  const handleEditEmployee = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!employee || editSaving) return;
+    setEditFeedback(null);
+    const salary = parseMonthlySalary(editForm.salary);
+    if (!editForm.employee_code.trim()) {
+      setEditFeedback({ tone: "error", message: "Employee code is required." });
+      return;
+    }
+    if (!editForm.full_name.trim()) {
+      setEditFeedback({ tone: "error", message: "Full name is required." });
+      return;
+    }
+    if (!editForm.email.trim()) {
+      setEditFeedback({ tone: "error", message: "Email is required." });
+      return;
+    }
+    if (!editForm.phone.trim()) {
+      setEditFeedback({ tone: "error", message: "Phone number is required." });
+      return;
+    }
+    if (salary === null) {
+      setEditFeedback({ tone: "error", message: "Salary cannot be negative and must use up to two decimal places." });
+      return;
+    }
+
+    setEditSaving(true);
+    try {
+      const updatedEmployee = await updateEmployeeProfile({
+        id: employee.id,
+        employee_code: editForm.employee_code.trim().toUpperCase(),
+        full_name: editForm.full_name.trim(),
+        email: editForm.email.trim(),
+        phone: editForm.phone.trim(),
+        department_id: editForm.department_id || null,
+        designation: editForm.designation.trim() || null,
+        joining_date: editForm.joining_date || null,
+        salary,
+        status: editForm.status,
+      });
+      setEmployee(updatedEmployee);
+      setSalaryInput(formatSalaryInput(updatedEmployee.salary));
+      setContactEmail(updatedEmployee.email ?? "");
+      setContactPhone(updatedEmployee.phone ?? "");
+      setEditForm(editFormFor(updatedEmployee));
+      setEditDialogOpen(false);
+      setEditFeedback(null);
+      setContactFeedback(null);
+      setSalaryFeedback(null);
+      setProfileFeedback({ tone: "success", message: "Employee details updated successfully." });
+    } catch (cause) {
+      setEditFeedback({ tone: "error", message: cause instanceof Error ? cause.message : "Employee details could not be updated." });
+    } finally {
+      setEditSaving(false);
+    }
+  };
+
   const handleDelete = async () => {
     if (!employee || deleting) return;
 
@@ -168,6 +327,7 @@ export default function EmployeeAttendance() {
   return (
     <div className="page-stack">
       <Link className="text-link" to="/employees"><ArrowLeft size={15} /> Back to employees</Link>
+      {profileFeedback && <div className={profileFeedback.tone === "error" ? "form-error" : "form-success"} role={profileFeedback.tone === "error" ? "alert" : "status"}>{profileFeedback.message}</div>}
 
       <section className="employee-profile panel">
         <div className="employee-profile-main">
@@ -184,21 +344,30 @@ export default function EmployeeAttendance() {
           <div><span>Joining date</span><strong>{formatDate(employee.joining_date)}</strong></div>
         </div>
         <div className="employee-profile-actions">
+          <button className="button button-secondary" type="button" onClick={() => { setEditForm(editFormFor(employee)); setEditFeedback(null); setEditDialogOpen(true); }}>
+            <Edit3 size={15} /> Edit Employee
+          </button>
           <button className="button button-danger" type="button" onClick={() => { setDeleteError(""); setDeleteDialogOpen(true); }}>
             <Trash2 size={15} /> Delete Employee
           </button>
         </div>
       </section>
 
+      <section className="panel">
+        <div className="panel-header"><div><div className="eyebrow">Employee contact</div><h2>Contact information</h2><p>Existing NULL values remain allowed. Email and phone are used as contact details, not phone OTP.</p></div></div>
+        <form className="salary-form" onSubmit={(event) => void handleSaveContact(event)}><div className="form-grid"><label htmlFor="employee-email">Email<input id="employee-email" type="email" value={contactEmail} onChange={(event) => setContactEmail(event.target.value)} placeholder="employee@company.com" /></label><label htmlFor="employee-phone">Phone<input id="employee-phone" value={contactPhone} onChange={(event) => setContactPhone(event.target.value)} placeholder="+919876543210" /></label></div>{contactFeedback && <div className={contactFeedback.tone === "error" ? "form-error" : "form-success"} role={contactFeedback.tone === "error" ? "alert" : "status"}>{contactFeedback.message}</div>}<button className="button button-primary" type="submit" disabled={contactSaving}>{contactSaving ? "Saving…" : "Save contact information"}</button></form>
+      </section>
+
       <section className="salary-panel panel">
         <div className="panel-header">
           <div><div className="eyebrow">Salary</div><h2>Monthly payroll</h2><p>Earned salary for {calendar.monthLabel} follows the attendance calendar below.</p></div>
-          <div className="salary-earned"><span>Current / earned salary</span><strong>{formatInr(earnedSalary.earnedSalary)}</strong><small>Present: {earnedSalary.presentDays} / {earnedSalary.totalWorkingDays} working days</small></div>
+          <div className="salary-earned"><span>Current / earned salary</span><strong>{formatInr(earnedSalary.earnedSalary)}</strong><small>Paid days: {earnedSalary.paidDays} / {earnedSalary.totalWorkingDays} working days</small></div>
         </div>
         <div className="salary-breakdown">
           <div><span>Monthly salary</span><strong>{formatInr(Number(employee.salary))}</strong></div>
           <div><span>Total working days</span><strong>{earnedSalary.totalWorkingDays}</strong></div>
           <div><span>Present days</span><strong>{earnedSalary.presentDays}</strong></div>
+          <div><span>Paid leave</span><strong>{earnedSalary.paidLeaveDays}</strong></div>
           <div><span>Daily salary</span><strong>{formatInr(earnedSalary.dailySalary)}</strong></div>
         </div>
         <form className="salary-form" onSubmit={(event) => void handleSaveSalary(event)}>
@@ -234,7 +403,10 @@ export default function EmployeeAttendance() {
           <div className="calendar-legend" aria-label="Calendar legend">
             <span><i className="legend-swatch legend-present" />Present</span>
             <span><i className="legend-swatch legend-absent" />Absent</span>
-            <span><i className="legend-swatch legend-holiday" />Holiday</span>
+            <span><i className="legend-swatch legend-half-day" />Half day</span>
+            <span><i className="legend-swatch legend-leave" />Paid leave</span>
+            <span><i className="legend-swatch legend-holiday" />Friday off</span>
+            <span><i className="legend-swatch legend-admin-holiday" />Admin holiday</span>
             <span><i className="legend-swatch legend-future" />Future / not applicable</span>
           </div>
         </div>
@@ -244,7 +416,7 @@ export default function EmployeeAttendance() {
             {Array.from({ length: leadingCells }, (_, index) => <div className="calendar-day calendar-day-empty" key={`leading-${index}`} />)}
             {calendar.days.map((day) => (
               <button
-                className={`calendar-day calendar-day-${day.status.toLowerCase()} ${selectedDate === day.date ? "calendar-day-selected" : ""}`}
+                className={`calendar-day calendar-day-${day.status.toLowerCase()}${day.holiday ? " calendar-day-admin-holiday" : ""}${day.leaveConflict ? " calendar-day-conflict" : ""} ${selectedDate === day.date ? "calendar-day-selected" : ""}`}
                 key={day.date}
                 type="button"
                 title={getDayTooltip(day)}
@@ -261,7 +433,15 @@ export default function EmployeeAttendance() {
         </div>
       </section>
 
-      <div className="inline-notice"><CalendarDays size={17} /><div><strong>Paid leave tracking is not configured</strong><span>Leave counts are intentionally omitted until an approved leave system is available.</span></div></div>
+      <section className="panel table-panel">
+        <div className="panel-header">
+          <div><h2>Paid Leave History</h2><p>Approved paid leave is included in the calendar and earned salary.</p></div>
+          <div className="table-summary">{leaveRequests.length} request{leaveRequests.length === 1 ? "" : "s"}</div>
+        </div>
+        {leaveRequests.length === 0 ? <EmptyState title="No paid leave requests yet" description="Leave requests for this employee will appear here after submission." /> : <div className="table-scroll"><table><thead><tr><th>Dates</th><th>Paid working days</th><th>Status</th><th>Reason</th><th>Requested</th><th>Decision</th></tr></thead><tbody>{leaveRequests.map((request) => { const decisionDate = leaveDecisionDate(request.status, request); return <tr key={request.id}><td>{formatDate(request.start_date)} – {formatDate(request.end_date)}</td><td>{request.requested_working_days}</td><td><StatusBadge tone={leaveStatusTone(request.status)}>{request.status === "APPROVED" ? "APPROVED · PAID" : request.status}</StatusBadge></td><td className="leave-reason-cell"><div>{request.reason}</div>{request.status === "REJECTED" && request.rejection_reason && <span className="rejection-note">Rejection: {request.rejection_reason}</span>}</td><td>{formatDateTime(request.created_at)}</td><td>{decisionDate ? formatDateTime(decisionDate) : <span className="muted">—</span>}</td></tr>; })}</tbody></table></div>}
+      </section>
+
+      {editDialogOpen && <div className="modal-backdrop" role="presentation"><section className="modal" role="dialog" aria-modal="true" aria-labelledby="edit-employee-title"><div className="modal-header"><div><div className="eyebrow">Employee directory</div><h2 id="edit-employee-title">Edit Employee</h2></div><button className="icon-button" type="button" onClick={() => setEditDialogOpen(false)} disabled={editSaving} aria-label="Close edit employee dialog"><X size={19} /></button></div><form className="modal-form" onSubmit={(event) => void handleEditEmployee(event)}><div className="form-grid"><label>Full Name *<input value={editForm.full_name} onChange={(event) => setEditForm({ ...editForm, full_name: event.target.value })} required /></label><label>Employee Code *<input value={editForm.employee_code} onChange={(event) => setEditForm({ ...editForm, employee_code: event.target.value.toUpperCase() })} required /></label><label>Email *<input type="email" value={editForm.email} onChange={(event) => setEditForm({ ...editForm, email: event.target.value })} required /></label><label>Phone Number *<input value={editForm.phone} onChange={(event) => setEditForm({ ...editForm, phone: event.target.value })} placeholder="+919876543210" required /></label><label>Department<select value={editForm.department_id} onChange={(event) => setEditForm({ ...editForm, department_id: event.target.value })}><option value="">Unassigned</option>{departments.map((department) => <option key={department.id} value={department.id}>{department.name}{department.is_active ? "" : " (inactive)"}</option>)}</select></label><label>Designation<input value={editForm.designation} onChange={(event) => setEditForm({ ...editForm, designation: event.target.value })} /></label><label>Joining Date<input type="date" value={editForm.joining_date} onChange={(event) => setEditForm({ ...editForm, joining_date: event.target.value })} /></label><label>Salary (INR)<input type="number" min="0" max="9999999999.99" step="0.01" value={editForm.salary} onChange={(event) => setEditForm({ ...editForm, salary: event.target.value })} required /></label><label>Employee Status<select value={editForm.status} onChange={(event) => setEditForm({ ...editForm, status: event.target.value as EmployeeStatus })}><option value="ACTIVE">ACTIVE</option><option value="INACTIVE">INACTIVE</option><option value="SUSPENDED">SUSPENDED</option></select></label></div>{editFeedback && <div className="form-error" role="alert">{editFeedback.message}</div>}<div className="modal-actions"><button className="button button-secondary" type="button" onClick={() => setEditDialogOpen(false)} disabled={editSaving}>Cancel</button><button className="button button-primary" type="submit" disabled={editSaving}>{editSaving ? "Saving…" : "Save Changes"}</button></div></form></section></div>}
 
       {deleteDialogOpen && <div className="modal-backdrop" role="presentation"><section className="modal delete-modal" role="alertdialog" aria-modal="true" aria-labelledby="delete-employee-title" aria-describedby="delete-employee-warning">
         <div className="modal-header">

@@ -162,6 +162,14 @@ tbody tr:hover { background: #fafbfe; }
 .legend-holiday { background: #e7edf4; border-color: #bdc8d6; }
 .legend-future { background: #f4f5f7; border-color: #d9dde5; }
 .calendar-content { padding: 0 23px 23px; }
+.holiday-month-toolbar { display: flex; align-items: center; justify-content: center; gap: 12px; padding: 0 23px 18px; }
+.holiday-month-toolbar strong { min-width: 150px; color: var(--ink); font-size: 13px; text-align: center; }
+.holiday-calendar-content { padding-top: 0; }
+.holiday-selected-date, .holiday-reason-detail { display: grid; gap: 5px; padding: 13px 15px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface-soft); }
+.holiday-selected-date span, .holiday-reason-detail span { color: var(--subtle); font-size: 10px; }
+.holiday-selected-date strong, .holiday-reason-detail strong { color: var(--ink); font-size: 12px; }
+.holiday-detail-body { display: grid; gap: 15px; padding: 21px 24px 23px; }
+.holiday-detail-body .modal-actions { margin-top: 0; }
 .calendar-weekdays, .attendance-calendar { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 7px; }
 .calendar-weekdays { margin-bottom: 7px; }
 .calendar-weekdays span { padding: 5px 7px; color: var(--subtle); font-size: 9px; font-weight: 700; letter-spacing: .08em; text-align: center; text-transform: uppercase; }
@@ -175,6 +183,7 @@ button.calendar-day:hover { transform: translateY(-1px); border-color: #b5b8dd; 
 .calendar-day-holiday { color: #62748b; background: #eef2f6; border-color: #e0e6ed; }
 .calendar-day-future { color: #9da5b2; background: #f7f8fa; border-color: #eef0f3; }
 .calendar-day-future > span { color: #9da5b2; }
+.calendar-day-conflict { box-shadow: inset 0 0 0 2px #d39a42; }
 .calendar-day-empty { min-height: 74px; background: transparent; }
 .calendar-day-selected { outline: 2px solid var(--purple); outline-offset: 1px; }
 .calendar-day-detail { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-top: 17px; padding: 13px 15px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface-soft); }
@@ -277,9 +286,47 @@ button.calendar-day:hover { transform: translateY(-1px); border-color: #b5b8dd; 
 .auth-form input::placeholder { color: #b0b6c1; }
 .login-submit { width: 100%; height: 44px; margin-top: 4px; font-size: 12px; }
 .login-note { display: flex; align-items: flex-start; gap: 7px; margin-top: 24px; color: var(--subtle); font-size: 10px; line-height: 1.5; }
+.login-note span { display: block; }
+.recovery-email-note { display: grid; gap: 2px; }
 .login-note svg { flex: 0 0 auto; margin-top: 1px; }
+.recovery-resend { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 2px; color: var(--subtle); font-size: 10px; }
+.recovery-resend .text-link { border: 0; padding: 0; background: transparent; }
+.recovery-resend .text-link:disabled { cursor: not-allowed; opacity: .55; }
 .login-footer { margin-top: auto; color: #a6adba; font-size: 10px; text-align: center; }
 .login-footer span { padding: 0 5px; color: #d3d7df; }
+.password-requirements { display: grid; gap: 5px; padding: 11px 12px; border: 1px solid #e4e3fb; border-radius: 8px; color: #7775a9; background: #f8f8ff; font-size: 10px; line-height: 1.35; }
+.password-requirements strong { color: #514ca4; font-size: 10px; }
+.employee-portal-page { min-height: 100vh; background: #f6f7fb; }
+.employee-portal-header { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 21px clamp(18px, 5vw, 72px); border-bottom: 1px solid var(--line); background: white; }
+.employee-portal-header-actions { display: flex; align-items: center; gap: 17px; }
+.portal-header-name { color: var(--muted); font-size: 11px; }
+.employee-portal-content { max-width: 1180px; margin: 0 auto; padding: 38px clamp(18px, 5vw, 72px) 54px; }
+.employee-portal-nav { display: flex; align-items: center; gap: 6px; width: fit-content; margin-bottom: 27px; padding: 5px; border: 1px solid var(--line); border-radius: 10px; background: #fff; }
+.employee-portal-nav-link { display: inline-flex; align-items: center; min-height: 32px; padding: 0 14px; border-radius: 7px; color: var(--muted); font-size: 11px; font-weight: 700; text-decoration: none; transition: color .16s ease, background .16s ease; }
+.employee-portal-nav-link:hover { color: var(--ink); background: #f1f3f8; }
+.employee-portal-nav-link.employee-portal-nav-active { color: #4e4aa0; background: #eeedff; }
+.portal-subtitle { margin-top: 8px; color: var(--muted); font-size: 12px; }
+.portal-profile { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 23px 25px; margin-bottom: 21px; }
+.portal-profile-copy { display: flex; align-items: center; gap: 14px; }
+.portal-profile-copy h2 { color: var(--ink); font-size: 18px; }
+.portal-profile-copy p { margin-top: 5px; color: var(--muted); font-size: 11px; }
+.portal-profile-details { display: flex; gap: 29px; margin-left: auto; }
+.portal-profile-details div { display: grid; gap: 4px; min-width: 105px; }
+.portal-profile-details span { color: var(--subtle); font-size: 10px; }
+.portal-profile-details strong { color: #3d4657; font-size: 11px; }
+.portal-security { display: flex; align-items: center; gap: 7px; color: #2c8e67; font-size: 10px; font-weight: 700; }
+.employee-portal-metrics { margin-bottom: 21px; }
+.metric-value-currency { font-size: 19px; }
+.salary-summary-panel { overflow: hidden; margin-top: 21px; }
+.employee-salary-breakdown { margin-bottom: 20px; }
+.calendar-day-half_day { color: #a06f1d; background: var(--amber-soft); border-color: #f1dcae; }
+.calendar-day-leave { color: #52709e; background: #eaf2fc; border-color: #cbdcf1; }
+.calendar-day-admin-holiday { color: #704d9c; background: #f2eafd; border-color: #d8c7ef; }
+.calendar-day-admin-empty { color: #9da5b2; background: #fbfbfd; border-color: #eef0f3; }
+.calendar-day-admin-empty small { display: flex; align-items: center; justify-content: flex-end; color: #c1c5cf; }
+.legend-half-day { background: var(--amber-soft); border-color: #e1bd68; }
+.legend-leave { background: #eaf2fc; border-color: #9dbbde; }
+.legend-admin-holiday { background: #f2eafd; border-color: #bfa4dd; }
 
 @media (max-width: 1050px) {
   .content-shell, .topbar { padding-left: 25px; padding-right: 25px; }
@@ -326,6 +373,14 @@ button.calendar-day:hover { transform: translateY(-1px); border-color: #b5b8dd; 
   .login-form-panel { min-height: 100vh; padding: 35px 24px 22px; }
   .mobile-login-brand { display: flex; margin-bottom: 72px; }
   .login-form-wrap { width: min(100%, 390px); }
+  .employee-portal-header { padding: 17px 18px; }
+  .employee-portal-header .brand-caption { display: none; }
+  .portal-header-name { display: none; }
+  .employee-portal-content { padding-top: 25px; }
+  .employee-portal-nav { width: 100%; overflow-x: auto; }
+  .employee-portal-nav-link { flex: 1 0 auto; justify-content: center; }
+  .portal-profile { align-items: flex-start; flex-direction: column; }
+  .portal-profile-details { width: 100%; flex-wrap: wrap; gap: 14px 24px; margin-left: 0; }
 }
 @media (max-width: 520px) {
   .metric-grid, .department-grid, .report-stat-grid { grid-template-columns: 1fr 1fr; gap: 10px; }

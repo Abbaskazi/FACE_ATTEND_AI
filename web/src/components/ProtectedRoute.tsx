@@ -3,10 +3,12 @@ import { useAuth } from "../auth/AuthProvider";
 import { PageLoader } from "./ui";
 
 export default function ProtectedRoute() {
-  const { loading, user } = useAuth();
+  const { loading, identityLoading, role, user } = useAuth();
   const location = useLocation();
 
   if (loading) return <PageLoader label="Checking your session…" />;
   if (!user) return <Navigate to="/login" replace state={{ from: location }} />;
+  if (identityLoading) return <PageLoader label="Checking your access…" />;
+  if (role !== "admin") return <Navigate to={role === "employee" ? "/employee" : "/login"} replace />;
   return <Outlet />;
 }

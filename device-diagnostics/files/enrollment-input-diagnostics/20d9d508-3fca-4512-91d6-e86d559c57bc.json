@@ -1,0 +1,96 @@
+{
+  "id": "20d9d508-3fca-4512-91d6-e86d559c57bc",
+  "timestamp_epoch_ms": 1790952359945,
+  "employee_code": null,
+  "session_generation": "c5e1ba4d-3988-4f84-b86b-3b18089ce74c",
+  "camera_facing": "FRONT",
+  "source_image_width": 640,
+  "source_image_height": 480,
+  "crop_rect": {
+    "left": 0,
+    "top": 0,
+    "right": 640,
+    "bottom": 480
+  },
+  "rotation_degrees": 270,
+  "analysis_image_width": 480,
+  "analysis_image_height": 640,
+  "detected_face_bounding_box": {
+    "left": 125,
+    "top": 157,
+    "right": 337,
+    "bottom": 369
+  },
+  "source_landmarks": [
+    {
+      "order": "image_left_eye",
+      "x": 269.6295471191406,
+      "y": 235.66355895996094
+    },
+    {
+      "order": "image_right_eye",
+      "x": 197.48573303222656,
+      "y": 236.5128173828125
+    },
+    {
+      "order": "nose_base",
+      "x": 241.56112670898438,
+      "y": 276.9880065917969
+    },
+    {
+      "order": "image_left_mouth",
+      "x": 264.6325988769531,
+      "y": 304.0694274902344
+    },
+    {
+      "order": "image_right_mouth",
+      "x": 206.07151794433594,
+      "y": 304.7333068847656
+    }
+  ],
+  "canonical_target_landmarks": [
+    {
+      "order": "image_left_eye",
+      "x": 38.29460144042969,
+      "y": 51.6963005065918
+    },
+    {
+      "order": "image_right_eye",
+      "x": 73.53179931640625,
+      "y": 51.501399993896484
+    },
+    {
+      "order": "nose_base",
+      "x": 56.02519989013672,
+      "y": 71.73660278320312
+    },
+    {
+      "order": "image_left_mouth",
+      "x": 41.54930114746094,
+      "y": 92.3655014038086
+    },
+    {
+      "order": "image_right_mouth",
+      "x": 70.72989654541016,
+      "y": 92.2041015625
+    }
+  ],
+  "aligned_crop_width": 112,
+  "aligned_crop_height": 112,
+  "model_name": "glintr100.onnx",
+  "model_version": "4ab1d6435d639628a6f3e5008dd4f929edf4c4124b1a7169e1048f9fef534cdf",
+  "tensor_shape": [
+    1,
+    3,
+    112,
+    112
+  ],
+  "preprocessing_formula": "(pixel - 127.5) \/ 127.5",
+  "channel_order": "RGB",
+  "embedding_dimension": 512,
+  "embedding_l2_norm": 1,
+  "embedding_provenance_sha256": "0465f5df9066e908b1cd09da109a23823dc38760d7adbceb777525eaa71b7aa8",
+  "image_sha256": "f8a5fcc8c885be5c351e8f82daf115a27144006c1274e18202745734a5a499e2",
+  "tensor_sha256": "d3978aac611b06f015e9cdebaabb3917fab7ccaebb1a389b348eae4483629684",
+  "image_file": "20d9d508-3fca-4512-91d6-e86d559c57bc.png"
+}

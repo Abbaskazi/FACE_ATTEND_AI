@@ -51,7 +51,7 @@ fun CameraPreview(
     val analyzer = remember(embeddingModel, livenessModel, sessionGeneration) {
         FaceAnalyzer(
             embeddingModel = embeddingModel,
-            alignment = ArcFaceAligner(),
+            alignment = ArcFaceAligner(analysisFrameIsMirrored = true),
             inferenceExecutor = analysisExecutor,
             onStateChanged = { currentStateCallback.value(it) },
             sessionGeneration = sessionGeneration,

@@ -3,7 +3,7 @@ import type { FormEvent } from "react";
 import { Copy, Plus, Search, UserRoundPlus, X } from "lucide-react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthProvider";
-import { createEmployee, createEnrollmentSession, getDepartments, getEmployees, getEnrollmentLabel, getEnrollmentSessions, latestEnrollmentByEmployee } from "../lib/data";
+import { createEmployee, createEnrollmentSession, getDepartments, getEmployees, getEnrollmentLabel, getEnrollmentSessions, latestEnrollmentByEmployee, provisionEmployeeAccount } from "../lib/data";
 import type { Department, Employee, EnrollmentSession } from "../types/database";
 import { EmptyState, ErrorState, Initials, PageLoader, StatusBadge } from "../components/ui";
 
@@ -21,6 +21,7 @@ export default function Employees() {
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState("");
   const [sessionCreatingFor, setSessionCreatingFor] = useState<string | null>(null);
+  const [accountProvisioningFor, setAccountProvisioningFor] = useState<string | null>(null);
   const [sessionResult, setSessionResult] = useState<{ employeeName: string; token: string; expiresAt: string } | null>(null);
   const [form, setForm] = useState({ employee_code: "", full_name: "", email: "", phone: "", department_id: "", designation: "", joining_date: "" });
 
@@ -60,7 +61,7 @@ export default function Employees() {
     setSaving(true);
     setFormError("");
     try {
-      await createEmployee({ ...form, email: form.email || null, phone: form.phone || null, department_id: form.department_id || null, designation: form.designation || null, joining_date: form.joining_date || null, created_by: user.id });
+      await createEmployee({ ...form, email: form.email.trim(), phone: form.phone.trim(), department_id: form.department_id || null, designation: form.designation || null, joining_date: form.joining_date || null, created_by: user.id });
       setDialogOpen(false);
       resetForm();
       await loadEmployees();
@@ -85,6 +86,19 @@ export default function Employees() {
     }
   };
 
+  const handleProvisionAccount = async (employee: Employee) => {
+    setAccountProvisioningFor(employee.id);
+    setError("");
+    try {
+      await provisionEmployeeAccount(employee.id);
+      await loadEmployees();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Employee login could not be provisioned.");
+    } finally {
+      setAccountProvisioningFor(null);
+    }
+  };
+
   if (loading) return <PageLoader label="Loading employees…" />;
   if (error) return <ErrorState message={error} onRetry={() => void loadEmployees()} />;
 
@@ -105,16 +119,16 @@ export default function Employees() {
       <section className="panel table-panel">
         <div className="panel-header"><div><h2>Employee directory</h2><p>{employees.length} employee{employees.length === 1 ? "" : "s"} in your workspace</p></div><div className="table-summary">{filteredEmployees.length} shown</div></div>
         {filteredEmployees.length === 0 ? <EmptyState title={employees.length ? "No matches found" : "No employees yet"} description={employees.length ? "Try a different search term." : "Add your first employee to begin building the directory."} action={!employees.length ? <button className="button button-secondary button-small" onClick={() => setDialogOpen(true)}><UserRoundPlus size={15} /> Add employee</button> : undefined} /> : (
-          <div className="table-scroll"><table><thead><tr><th>Employee</th><th>Department</th><th>Status</th><th>Enrollment</th><th>Contact</th></tr></thead><tbody>
+          <div className="table-scroll"><table><thead><tr><th>Employee</th><th>Department</th><th>Status</th><th>Employee login</th><th>Enrollment</th><th>Contact</th></tr></thead><tbody>
             {filteredEmployees.map((employee) => {
               const enrollment = getEnrollmentLabel(enrollments.get(employee.id));
-              return <tr key={employee.id}><td><div className="person-cell"><Initials name={employee.full_name} /><div><strong><Link className="employee-name-link" to={`/employees/${employee.id}/attendance`}>{employee.full_name}</Link></strong><span>{employee.employee_code}{employee.designation ? ` · ${employee.designation}` : ""}</span></div></div></td><td>{employee.departments ? <div><strong className="table-primary">{employee.departments.name}</strong><span className="table-secondary">{employee.departments.code}</span></div> : <span className="muted">Unassigned</span>}</td><td><StatusBadge tone={employee.status === "ACTIVE" ? "success" : employee.status === "SUSPENDED" ? "danger" : "muted"}>{employee.status}</StatusBadge></td><td><div><StatusBadge tone={enrollment.tone}>{enrollment.label}</StatusBadge>{employee.status === "ACTIVE" && enrollment.label !== "Enrolled" && <button className="button button-secondary button-small" disabled={sessionCreatingFor === employee.id} onClick={() => void handleCreateSession(employee)}>{sessionCreatingFor === employee.id ? "Creating…" : "Create session"}</button>}</div></td><td><span className="table-secondary">{employee.email ?? employee.phone ?? "No contact details"}</span></td></tr>;
+              return <tr key={employee.id}><td><div className="person-cell"><Initials name={employee.full_name} /><div><strong><Link className="employee-name-link" to={`/employees/${employee.id}/attendance`}>{employee.full_name}</Link></strong><span>{employee.employee_code}{employee.designation ? ` · ${employee.designation}` : ""}</span></div></div></td><td>{employee.departments ? <div><strong className="table-primary">{employee.departments.name}</strong><span className="table-secondary">{employee.departments.code}</span></div> : <span className="muted">Unassigned</span>}</td><td><StatusBadge tone={employee.status === "ACTIVE" ? "success" : employee.status === "SUSPENDED" ? "danger" : "muted"}>{employee.status}</StatusBadge></td><td><div>{employee.auth_user_id ? <StatusBadge tone="success">Provisioned</StatusBadge> : <button className="button button-secondary button-small" disabled={accountProvisioningFor === employee.id} onClick={() => void handleProvisionAccount(employee)}>{accountProvisioningFor === employee.id ? "Provisioning…" : "Provision login"}</button>}</div></td><td><div><StatusBadge tone={enrollment.tone}>{enrollment.label}</StatusBadge>{employee.status === "ACTIVE" && enrollment.label !== "Enrolled" && <button className="button button-secondary button-small" disabled={sessionCreatingFor === employee.id} onClick={() => void handleCreateSession(employee)}>{sessionCreatingFor === employee.id ? "Creating…" : "Create session"}</button>}</div></td><td><span className="table-secondary">{employee.email ?? employee.phone ?? "No contact details"}</span></td></tr>;
             })}
           </tbody></table></div>
         )}
       </section>
 
-      {dialogOpen && <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setDialogOpen(false); }}><section className="modal" role="dialog" aria-modal="true" aria-labelledby="add-employee-title"><div className="modal-header"><div><div className="eyebrow">Employee directory</div><h2 id="add-employee-title">Add employee</h2></div><button className="icon-button" onClick={() => setDialogOpen(false)} aria-label="Close dialog"><X size={19} /></button></div><form className="modal-form" onSubmit={handleCreate}><div className="form-grid"><label>Employee code<input value={form.employee_code} onChange={(event) => setForm({ ...form, employee_code: event.target.value.toUpperCase() })} placeholder="EMP-001" required /></label><label>Full name<input value={form.full_name} onChange={(event) => setForm({ ...form, full_name: event.target.value })} placeholder="Alex Morgan" required /></label><label>Email<input type="email" value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} placeholder="alex@company.com" /></label><label>Phone<input value={form.phone} onChange={(event) => setForm({ ...form, phone: event.target.value })} placeholder="Optional" /></label><label>Department<select value={form.department_id} onChange={(event) => setForm({ ...form, department_id: event.target.value })}><option value="">Unassigned</option>{departments.filter((department) => department.is_active).map((department) => <option key={department.id} value={department.id}>{department.name}</option>)}</select></label><label>Designation<input value={form.designation} onChange={(event) => setForm({ ...form, designation: event.target.value })} placeholder="Optional" /></label><label>Joining date<input type="date" value={form.joining_date} onChange={(event) => setForm({ ...form, joining_date: event.target.value })} /></label></div>{formError && <div className="form-error" role="alert">{formError}</div>}<div className="modal-actions"><button type="button" className="button button-secondary" onClick={() => setDialogOpen(false)}>Cancel</button><button className="button button-primary" type="submit" disabled={saving}>{saving ? "Saving…" : "Create employee"}</button></div></form></section></div>}
+      {dialogOpen && <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setDialogOpen(false); }}><section className="modal" role="dialog" aria-modal="true" aria-labelledby="add-employee-title"><div className="modal-header"><div><div className="eyebrow">Employee directory</div><h2 id="add-employee-title">Add employee</h2></div><button className="icon-button" onClick={() => setDialogOpen(false)} aria-label="Close dialog"><X size={19} /></button></div><form className="modal-form" onSubmit={handleCreate}><div className="form-grid"><label>Employee code<input value={form.employee_code} onChange={(event) => setForm({ ...form, employee_code: event.target.value.toUpperCase() })} placeholder="EMP-001" required /></label><label>Full name<input value={form.full_name} onChange={(event) => setForm({ ...form, full_name: event.target.value })} placeholder="Alex Morgan" required /></label><label>Email<input type="email" value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} placeholder="alex@company.com" required /></label><label>Phone<input value={form.phone} onChange={(event) => setForm({ ...form, phone: event.target.value })} placeholder="+919876543210" required /></label><label>Department<select value={form.department_id} onChange={(event) => setForm({ ...form, department_id: event.target.value })}><option value="">Unassigned</option>{departments.filter((department) => department.is_active).map((department) => <option key={department.id} value={department.id}>{department.name}</option>)}</select></label><label>Designation<input value={form.designation} onChange={(event) => setForm({ ...form, designation: event.target.value })} placeholder="Optional" /></label><label>Joining date<input type="date" value={form.joining_date} onChange={(event) => setForm({ ...form, joining_date: event.target.value })} /></label></div>{formError && <div className="form-error" role="alert">{formError}</div>}<div className="modal-actions"><button type="button" className="button button-secondary" onClick={() => setDialogOpen(false)}>Cancel</button><button className="button button-primary" type="submit" disabled={saving}>{saving ? "Saving…" : "Create employee"}</button></div></form></section></div>}
     </div>
   );
 }

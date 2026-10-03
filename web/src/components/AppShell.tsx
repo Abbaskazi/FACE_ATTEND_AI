@@ -10,6 +10,7 @@ import {
   LogOut,
   Menu,
   Users,
+  KeyRound,
   X,
 } from "lucide-react";
 import { useAuth } from "../auth/AuthProvider";
@@ -22,6 +23,9 @@ const navigation = [
   { to: "/employees", label: "Employees", icon: Users },
   { to: "/departments", label: "Departments", icon: Building2 },
   { to: "/attendance", label: "Attendance", icon: ClipboardCheck },
+  { to: "/leave-requests", label: "Leave Requests", icon: CalendarDays },
+  { to: "/holidays", label: "Holidays", icon: CalendarDays },
+  { to: "/password-change-requests", label: "Password Change Requests", icon: KeyRound },
   { to: "/reports", label: "Reports", icon: BarChart3 },
 ];
 
@@ -30,6 +34,9 @@ const pageTitles: Record<string, { title: string; eyebrow: string }> = {
   "/employees": { title: "Employees", eyebrow: "People directory" },
   "/departments": { title: "Departments", eyebrow: "Organization" },
   "/attendance": { title: "Attendance", eyebrow: "Daily records" },
+  "/leave-requests": { title: "Leave Requests", eyebrow: "Paid leave" },
+  "/holidays": { title: "Holiday Management", eyebrow: "Paid non-working days" },
+  "/password-change-requests": { title: "Password Change Requests", eyebrow: "Employee security" },
   "/reports": { title: "Reports", eyebrow: "Insights" },
 };
 
@@ -42,7 +49,7 @@ export default function AppShell() {
   const [profileOpen, setProfileOpen] = useState(false);
   const page = pageTitles[location.pathname] ?? (
     location.pathname.startsWith("/employees/")
-      ? { title: "Employee attendance", eyebrow: "People directory" }
+      ? { title: "Employee details", eyebrow: "People directory" }
       : pageTitles["/dashboard"]
   );
 

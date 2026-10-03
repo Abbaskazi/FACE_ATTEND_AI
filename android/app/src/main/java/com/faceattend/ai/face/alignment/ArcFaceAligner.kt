@@ -6,8 +6,13 @@ import android.graphics.Color
 import android.graphics.Matrix
 import android.graphics.Paint
 import android.graphics.PointF
+import android.util.Log
+import com.faceattend.ai.BuildConfig
 import com.google.mlkit.vision.face.Face
 import com.google.mlkit.vision.face.FaceLandmark
+
+private const val RAW_LANDMARK_LOG_TAG = "RAW_LANDMARK_TEST"
+private const val RAW_LANDMARK_LOG_PREFIX = "RAW_LANDMARK_HANDNESS_TEST "
 
 /**
  * Production five-point ArcFace alignment.
@@ -36,6 +41,21 @@ class ArcFaceAligner(
                 subjectLeftMouth = face.requiredLandmark(FaceLandmark.MOUTH_LEFT),
                 subjectRightMouth = face.requiredLandmark(FaceLandmark.MOUTH_RIGHT),
             )
+            if (BuildConfig.DEBUG) {
+                Log.d(
+                    RAW_LANDMARK_LOG_TAG,
+                    RAW_LANDMARK_LOG_PREFIX +
+                        "bitmap=${oriented.width}x${oriented.height} " +
+                        "rotation=$rotationDegrees " +
+                        "MLKIT_LEFT_EYE=${subjectLandmarks.subjectLeftEye} " +
+                        "MLKIT_RIGHT_EYE=${subjectLandmarks.subjectRightEye} " +
+                        "MLKIT_MOUTH_LEFT=${subjectLandmarks.subjectLeftMouth} " +
+                        "MLKIT_MOUTH_RIGHT=${subjectLandmarks.subjectRightMouth} " +
+                        "MLKIT_NOSE_BASE=${subjectLandmarks.noseBase} " +
+                        "EYE_DELTA_X=${subjectLandmarks.subjectRightEye.x - subjectLandmarks.subjectLeftEye.x} " +
+                        "MOUTH_DELTA_X=${subjectLandmarks.subjectRightMouth.x - subjectLandmarks.subjectLeftMouth.x}",
+                )
+            }
             val imageOrderedLandmarks = ArcFaceLandmarkOrder.inImageOrder(subjectLandmarks)
                 .map { point ->
                     if (analysisFrameIsMirrored) {
@@ -44,6 +64,17 @@ class ArcFaceAligner(
                         point
                     }
                 }
+            if (BuildConfig.DEBUG) {
+                Log.d(
+                    RAW_LANDMARK_LOG_TAG,
+                    RAW_LANDMARK_LOG_PREFIX +
+                        "ORDERED_LEFT_EYE=${imageOrderedLandmarks[0]} " +
+                        "ORDERED_RIGHT_EYE=${imageOrderedLandmarks[1]} " +
+                        "ORDERED_NOSE=${imageOrderedLandmarks[2]} " +
+                        "ORDERED_LEFT_MOUTH=${imageOrderedLandmarks[3]} " +
+                        "ORDERED_RIGHT_MOUTH=${imageOrderedLandmarks[4]}",
+                )
+            }
             imageOrderedLandmarks.forEach { point ->
                 require(point.x >= 0f && point.x <= renderSource.width) {
                     "Landmark x is outside the analysis frame: point=$point, " +

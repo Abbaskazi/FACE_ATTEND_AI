@@ -9,14 +9,18 @@ import { PageLoader } from "../components/ui";
 export default function Login() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { loading: authLoading, user } = useAuth();
+  const { loading: authLoading, identityLoading, role, user } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
   if (authLoading) return <PageLoader label="Loading FaceAttend AI…" />;
-  if (user) {
+  if (user && identityLoading) return <PageLoader label="Checking your access…" />;
+  if (user && role === "employee") {
+    return <Navigate to="/employee" replace />;
+  }
+  if (user && role === "admin") {
     const from = (location.state as { from?: { pathname?: string } } | null)?.from?.pathname;
     return <Navigate to={from && from !== "/login" ? from : "/dashboard"} replace />;
   }
