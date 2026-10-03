@@ -26,8 +26,11 @@
 }
 
 * { box-sizing: border-box; }
-body { margin: 0; min-width: 320px; }
-button, input, select { font: inherit; }
+html { overflow-x: hidden; }
+body { margin: 0; min-width: 320px; overflow-x: hidden; }
+button, input, select, textarea { font: inherit; }
+button, input, select, textarea { max-width: 100%; }
+img, svg { max-width: 100%; }
 button { cursor: pointer; }
 a { color: inherit; }
 #root { min-height: 100vh; }
