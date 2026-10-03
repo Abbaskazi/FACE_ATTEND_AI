@@ -308,7 +308,7 @@ export default function EmployeeAttendance() {
     setDeleteError("");
     try {
       await deleteEmployee(employee.id);
-      navigate("/employees", { replace: true, state: { employeeDeleted: true } });
+      navigate("/admin/employees", { replace: true, state: { employeeDeleted: true } });
     } catch (cause) {
       setDeleteError(cause instanceof Error ? cause.message : "Employee could not be deleted. No changes were made.");
       setDeleting(false);
@@ -322,11 +322,11 @@ export default function EmployeeAttendance() {
 
   if (loading && !employee) return <PageLoader label="Loading employee attendance…" />;
   if (error && !employee) return <ErrorState message={error} onRetry={() => void loadDetails()} />;
-  if (!employee) return <EmptyState title="Employee unavailable" description="This employee could not be loaded." action={<Link className="button button-secondary button-small" to="/employees">Back to employees</Link>} />;
+  if (!employee) return <EmptyState title="Employee unavailable" description="This employee could not be loaded." action={<Link className="button button-secondary button-small" to="/admin/employees">Back to employees</Link>} />;
 
   return (
     <div className="page-stack">
-      <Link className="text-link" to="/employees"><ArrowLeft size={15} /> Back to employees</Link>
+      <Link className="text-link" to="/admin/employees"><ArrowLeft size={15} /> Back to employees</Link>
       {profileFeedback && <div className={profileFeedback.tone === "error" ? "form-error" : "form-success"} role={profileFeedback.tone === "error" ? "alert" : "status"}>{profileFeedback.message}</div>}
 
       <section className="employee-profile panel">

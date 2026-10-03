@@ -26,7 +26,7 @@ const loginErrors: Record<string, string> = {
 export default function EmployeeLogin() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { loading: authLoading, identityLoading, role, user } = useAuth();
+  const { loading: authLoading, identityLoading, role, user, employeeProfile } = useAuth();
   const [employeeCode, setEmployeeCode] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -53,8 +53,10 @@ export default function EmployeeLogin() {
   }, [forgotPassword, recoveryStep, resendCooldownSeconds]);
 
   if (authLoading || (user && identityLoading)) return <PageLoader label="Loading employee access…" />;
-  if (user && role === "admin") return <Navigate to="/dashboard" replace />;
-  if (user && role === "employee") return <Navigate to="/employee" replace state={{ from: location }} />;
+  if (user && role === "admin") return <Navigate to="/admin/dashboard" replace />;
+  if (user && role === "employee") {
+    return <Navigate to={employeeProfile?.must_change_password ? "/employee/change-password" : "/employee"} replace state={{ from: location }} />;
+  }
 
   const handleLogin = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();

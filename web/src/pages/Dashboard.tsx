@@ -52,7 +52,7 @@ export default function Dashboard() {
 
       <section className="dashboard-grid">
         <article className="panel recent-panel">
-          <div className="panel-header"><div><h2>Recent attendance</h2><p>Latest check-in activity across your team</p></div><Link className="text-link" to="/attendance">View all <ArrowUpRight size={15} /></Link></div>
+          <div className="panel-header"><div><h2>Recent attendance</h2><p>Latest check-in activity across your team</p></div><Link className="text-link" to="/admin/attendance">View all <ArrowUpRight size={15} /></Link></div>
           {data.recentAttendance.length === 0 ? (
             <EmptyState title="No attendance yet" description="Attendance records will appear here once employees check in." />
           ) : (
@@ -72,9 +72,9 @@ export default function Dashboard() {
         <article className="panel quick-panel">
           <div className="panel-header"><div><h2>At a glance</h2><p>Keep your workspace moving</p></div></div>
           <div className="quick-list">
-            <Link to="/employees" className="quick-link"><div className="quick-link-icon"><Users size={18} /></div><div><strong>Manage employees</strong><span>Review profiles and enrollment status</span></div><ArrowUpRight size={16} /></Link>
-            <Link to="/attendance" className="quick-link"><div className="quick-link-icon"><Clock3 size={18} /></div><div><strong>Review attendance</strong><span>Check daily records and working hours</span></div><ArrowUpRight size={16} /></Link>
-            <Link to="/reports" className="quick-link"><div className="quick-link-icon"><Building2 size={18} /></div><div><strong>Open reports</strong><span>Explore team attendance trends</span></div><ArrowUpRight size={16} /></Link>
+            <Link to="/admin/employees" className="quick-link"><div className="quick-link-icon"><Users size={18} /></div><div><strong>Manage employees</strong><span>Review profiles and enrollment status</span></div><ArrowUpRight size={16} /></Link>
+            <Link to="/admin/attendance" className="quick-link"><div className="quick-link-icon"><Clock3 size={18} /></div><div><strong>Review attendance</strong><span>Check daily records and working hours</span></div><ArrowUpRight size={16} /></Link>
+            <Link to="/admin/reports" className="quick-link"><div className="quick-link-icon"><Building2 size={18} /></div><div><strong>Open reports</strong><span>Explore team attendance trends</span></div><ArrowUpRight size={16} /></Link>
           </div>
         </article>
       </section>

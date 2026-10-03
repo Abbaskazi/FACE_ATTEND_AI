@@ -22,7 +22,7 @@ export default function Login() {
   }
   if (user && role === "admin") {
     const from = (location.state as { from?: { pathname?: string } } | null)?.from?.pathname;
-    return <Navigate to={from && from !== "/login" ? from : "/dashboard"} replace />;
+    return <Navigate to={from && from !== "/login" && from !== "/admin" ? from : "/admin/dashboard"} replace />;
   }
 
   const handleLogin = async (event: FormEvent<HTMLFormElement>) => {
@@ -38,7 +38,7 @@ export default function Login() {
       return;
     }
 
-    navigate("/dashboard", { replace: true });
+    navigate("/admin/dashboard", { replace: true });
   };
 
   return (

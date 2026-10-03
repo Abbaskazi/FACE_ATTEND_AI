@@ -7,8 +7,8 @@ export default function ProtectedRoute() {
   const location = useLocation();
 
   if (loading) return <PageLoader label="Checking your session…" />;
-  if (!user) return <Navigate to="/login" replace state={{ from: location }} />;
+  if (!user) return <Navigate to="/admin" replace state={{ from: location }} />;
   if (identityLoading) return <PageLoader label="Checking your access…" />;
-  if (role !== "admin") return <Navigate to={role === "employee" ? "/employee" : "/login"} replace />;
+  if (role !== "admin") return <Navigate to={role === "employee" ? "/employee" : "/admin"} replace />;
   return <Outlet />;
 }

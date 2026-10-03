@@ -8,7 +8,7 @@ export default function EmployeeRoute() {
 
   if (loading || identityLoading) return <PageLoader label="Checking your employee session…" />;
   if (!user) return <Navigate to="/employee/login" replace state={{ from: location }} />;
-  if (role === "admin") return <Navigate to="/dashboard" replace />;
+  if (role === "admin") return <Navigate to="/admin/dashboard" replace />;
   if (role !== "employee" || !employeeProfile) return <Navigate to="/employee/login" replace />;
 
   const mustChange = employeeProfile.must_change_password;

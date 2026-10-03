@@ -19,25 +19,25 @@ import type { AdminProfile } from "../types/database";
 import { Initials, PageLoader } from "./ui";
 
 const navigation = [
-  { to: "/dashboard", label: "Overview", icon: LayoutDashboard },
-  { to: "/employees", label: "Employees", icon: Users },
-  { to: "/departments", label: "Departments", icon: Building2 },
-  { to: "/attendance", label: "Attendance", icon: ClipboardCheck },
-  { to: "/leave-requests", label: "Leave Requests", icon: CalendarDays },
-  { to: "/holidays", label: "Holidays", icon: CalendarDays },
-  { to: "/password-change-requests", label: "Password Change Requests", icon: KeyRound },
-  { to: "/reports", label: "Reports", icon: BarChart3 },
+  { to: "/admin/dashboard", label: "Overview", icon: LayoutDashboard },
+  { to: "/admin/employees", label: "Employees", icon: Users },
+  { to: "/admin/departments", label: "Departments", icon: Building2 },
+  { to: "/admin/attendance", label: "Attendance", icon: ClipboardCheck },
+  { to: "/admin/leave-requests", label: "Leave Requests", icon: CalendarDays },
+  { to: "/admin/holidays", label: "Holidays", icon: CalendarDays },
+  { to: "/admin/password-change-requests", label: "Password Change Requests", icon: KeyRound },
+  { to: "/admin/reports", label: "Reports", icon: BarChart3 },
 ];
 
 const pageTitles: Record<string, { title: string; eyebrow: string }> = {
-  "/dashboard": { title: "Overview", eyebrow: "Workspace" },
-  "/employees": { title: "Employees", eyebrow: "People directory" },
-  "/departments": { title: "Departments", eyebrow: "Organization" },
-  "/attendance": { title: "Attendance", eyebrow: "Daily records" },
-  "/leave-requests": { title: "Leave Requests", eyebrow: "Paid leave" },
-  "/holidays": { title: "Holiday Management", eyebrow: "Paid non-working days" },
-  "/password-change-requests": { title: "Password Change Requests", eyebrow: "Employee security" },
-  "/reports": { title: "Reports", eyebrow: "Insights" },
+  "/admin/dashboard": { title: "Overview", eyebrow: "Workspace" },
+  "/admin/employees": { title: "Employees", eyebrow: "People directory" },
+  "/admin/departments": { title: "Departments", eyebrow: "Organization" },
+  "/admin/attendance": { title: "Attendance", eyebrow: "Daily records" },
+  "/admin/leave-requests": { title: "Leave Requests", eyebrow: "Paid leave" },
+  "/admin/holidays": { title: "Holiday Management", eyebrow: "Paid non-working days" },
+  "/admin/password-change-requests": { title: "Password Change Requests", eyebrow: "Employee security" },
+  "/admin/reports": { title: "Reports", eyebrow: "Insights" },
 };
 
 export default function AppShell() {
@@ -48,9 +48,9 @@ export default function AppShell() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const page = pageTitles[location.pathname] ?? (
-    location.pathname.startsWith("/employees/")
+    location.pathname.startsWith("/admin/employees/")
       ? { title: "Employee details", eyebrow: "People directory" }
-      : pageTitles["/dashboard"]
+      : pageTitles["/admin/dashboard"]
   );
 
   useEffect(() => {
@@ -72,7 +72,7 @@ export default function AppShell() {
 
   const handleLogout = async () => {
     await signOut();
-    navigate("/login", { replace: true });
+    navigate("/admin", { replace: true });
   };
 
   if (!user) return <PageLoader label="Loading workspace…" />;

@@ -28,7 +28,7 @@ export default function EmployeeChangePassword() {
 
   if (loading || identityLoading) return <PageLoader label="Checking your employee session…" />;
   if (!user) return <Navigate to="/employee/login" replace />;
-  if (role === "admin") return <Navigate to="/dashboard" replace />;
+  if (role === "admin") return <Navigate to="/admin/dashboard" replace />;
   if (role !== "employee" || !employeeProfile) return <Navigate to="/employee/login" replace />;
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
